@@ -168,7 +168,7 @@ impl Directory {
     /// Makes a new post request to directory, signs payload with pkey.
     ///
     /// Returns the result struct that is deserialized from the result
-    async fn request<'a, T: Serialize, E>(
+    async fn request<T: Serialize, E>(
         &self,
         account: &mut Account,
         url: &str,
