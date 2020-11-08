@@ -52,9 +52,9 @@ const BIT_LENGTH: u32 = 2048;
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct DirectoryMetadata {
-    caa_identities: Vec<String>,
-    terms_of_service: String,
-    website: String,
+    terms_of_service: Option<String>,
+    website: Option<String>,
+    caa_identities: Option<Vec<String>>,
     #[serde(flatten)]
     other: HashMap<String, Value>,
 }
