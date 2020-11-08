@@ -66,3 +66,9 @@ pub(crate) fn gen_csr(pkey: &PKey<openssl::pkey::Private>, domains: &[&str]) -> 
 
     Ok(builder.build())
 }
+
+pub(crate) fn client() -> Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()?)
+}

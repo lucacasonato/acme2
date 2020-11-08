@@ -4,7 +4,6 @@ use crate::{jwt::Jws, CreateOrderResponse};
 use log::info;
 use openssl::x509::X509;
 use openssl::{pkey::PKey, x509::X509Req};
-use reqwest::Client;
 use reqwest::{header::CONTENT_TYPE, Response};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -78,7 +77,7 @@ impl<'a> CertificateSigner<'a> {
 
         let csr_payload = CsrRequest { csr: b64(payload) };
 
-        let client = Client::new();
+        let client = client()?;
 
         let jws = Jws::new(&order.finalize_url, &self.account, csr_payload)
             .await?
@@ -107,7 +106,7 @@ impl FinalizeResponse {
     }
 
     async fn get_certificates(&self, account: &Account) -> Result<Vec<X509>> {
-        let client = Client::new();
+        let client = client()?;
 
         let jws = Jws::new(&self.certificate, &account, "")
             .await?

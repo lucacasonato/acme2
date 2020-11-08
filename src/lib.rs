@@ -25,7 +25,6 @@ use openssl::pkey::PKey;
 use openssl::x509::X509;
 
 use error::Result;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{to_string, Value};
 
@@ -99,7 +98,7 @@ impl Directory {
     /// # async fn main () { try_main().await.unwrap(); }
     /// ```
     pub async fn from_url(url: &str) -> Result<Directory> {
-        let client = Client::new();
+        let client = client()?;
 
         let res = client.get(url).send().await?;
 
@@ -156,7 +155,7 @@ impl Directory {
     /// Gets nonce header from directory.
     ///
     async fn get_nonce(&self) -> Result<String> {
-        let client = Client::new();
+        let client = client()?;
         let res = client.get(&self.resources.new_nonce).send().await?;
         res.headers()
             .get("Replay-Nonce")
@@ -179,7 +178,7 @@ impl Directory {
     {
         let jws = Jws::new(url, account, payload).await?;
 
-        let client = Client::new();
+        let client = client()?;
 
         let res = client
             .post(url)

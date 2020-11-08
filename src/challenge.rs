@@ -1,5 +1,4 @@
 use crate::Account;
-use crate::Client;
 use crate::Identifier;
 use crate::Path;
 use crate::{jwt::Jws, CONTENT_TYPE};
@@ -106,7 +105,7 @@ impl Challenge {
         )
         .await?;
 
-        let client = Client::new();
+        let client = client()?;
 
         let resp = client
             .post(&self.url)
