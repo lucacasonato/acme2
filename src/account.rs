@@ -6,7 +6,6 @@ use openssl::pkey::PKey;
 use openssl::pkey::Private;
 use serde::Deserialize;
 use serde_json::json;
-use std::cell::RefCell;
 
 #[derive(Deserialize, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -49,7 +48,7 @@ pub struct Account {
 
 #[derive(Debug)]
 pub struct AccountBuilder<'a> {
-  directory: &'a RefCell<Directory>,
+  directory: &'a mut Directory,
 
   private_key: Option<PKey<Private>>,
 
@@ -60,7 +59,7 @@ pub struct AccountBuilder<'a> {
 }
 
 impl<'a> AccountBuilder<'a> {
-  pub fn new(directory: &'a RefCell<Directory>) -> Self {
+  pub fn new(directory: &'a mut Directory) -> Self {
     AccountBuilder {
       directory,
       private_key: None,
@@ -103,10 +102,10 @@ impl<'a> AccountBuilder<'a> {
       gen_pkey()?
     };
 
-    let mut dir = self.directory.try_borrow_mut()?;
-    let url = dir.new_account_url.clone();
+    let url = self.directory.new_account_url.clone();
 
-    let (res, headers) = dir
+    let (res, headers) = self
+      .directory
       .authenticated_request::<AcmeResult<Account>>(
         &url,
         json!({

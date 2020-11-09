@@ -7,9 +7,6 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 pub struct DirectoryBuilder {
   url: String,
   http_client: Option<reqwest::Client>,
@@ -28,9 +25,11 @@ impl DirectoryBuilder {
     self
   }
 
-  pub async fn build(self) -> Result<Rc<RefCell<Directory>>, Error> {
-    let http_client =
-      self.http_client.unwrap_or_else(|| reqwest::Client::new());
+  pub async fn build(&mut self) -> Result<Directory, Error> {
+    let http_client = self
+      .http_client
+      .clone()
+      .unwrap_or_else(|| reqwest::Client::new());
 
     let resp = http_client.get(&self.url).send().await?;
 
@@ -41,7 +40,7 @@ impl DirectoryBuilder {
     dir.http_client = http_client;
     dir.nonce = None;
 
-    Ok(Rc::new(RefCell::new(dir)))
+    Ok(dir)
   }
 }
 
