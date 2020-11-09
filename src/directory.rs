@@ -1,0 +1,142 @@
+use crate::jws::jws;
+use crate::resources::*;
+use anyhow::Error;
+use openssl::pkey::PKey;
+use openssl::pkey::Private;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde_json::Value;
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+pub struct DirectoryBuilder {
+  url: String,
+  http_client: Option<reqwest::Client>,
+}
+
+impl DirectoryBuilder {
+  pub fn new(url: String) -> Self {
+    DirectoryBuilder {
+      url,
+      http_client: None,
+    }
+  }
+
+  pub fn http_client(&mut self, http_client: reqwest::Client) -> &mut Self {
+    self.http_client = Some(http_client);
+    self
+  }
+
+  pub async fn build(self) -> Result<Rc<RefCell<Directory>>, Error> {
+    let http_client =
+      self.http_client.unwrap_or_else(|| reqwest::Client::new());
+
+    let resp = http_client.get(&self.url).send().await?;
+
+    let res: Result<Directory, Error> =
+      resp.json::<AcmeResult<Directory>>().await?.into();
+    let mut dir = res?;
+
+    dir.http_client = http_client;
+    dir.nonce = None;
+
+    Ok(Rc::new(RefCell::new(dir)))
+  }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Directory {
+  #[serde(skip)]
+  pub(crate) http_client: reqwest::Client,
+  #[serde(skip)]
+  pub(crate) nonce: Option<String>,
+
+  #[serde(rename = "newNonce")]
+  pub(crate) new_nonce_url: String,
+  #[serde(rename = "newAccount")]
+  pub(crate) new_account_url: String,
+  #[serde(rename = "newOrder")]
+  pub(crate) new_order_url: String,
+  #[serde(rename = "revokeCert")]
+  pub(crate) revoke_cert_url: String,
+  #[serde(rename = "keyChange")]
+  pub(crate) key_change_url: String,
+  #[serde(rename = "newAuthz")]
+  pub(crate) new_authz_url: Option<String>,
+  pub meta: Option<DirectoryMeta>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryMeta {
+  pub terms_of_service: Option<String>,
+  pub website: Option<String>,
+  pub caa_identities: Option<Vec<String>>,
+  pub external_account_required: Option<bool>,
+}
+
+fn extract_nonce_from_response(
+  resp: &reqwest::Response,
+) -> Result<Option<String>, Error> {
+  let headers = resp.headers();
+  let maybe_nonce_res = headers
+    .get("replay-nonce")
+    .map::<Result<String, Error>, _>(|hv| Ok(hv.to_str()?.to_string()));
+  match maybe_nonce_res {
+    Some(Ok(n)) => Ok(Some(n)),
+    Some(Err(err)) => Err(err),
+    None => Ok(None),
+  }
+}
+
+impl Directory {
+  pub(crate) async fn get_nonce(&mut self) -> Result<String, Error> {
+    if let Some(nonce) = self.nonce.clone() {
+      self.nonce = None;
+      return Ok(nonce);
+    }
+
+    let resp = self.http_client.get(&self.new_nonce_url).send().await?;
+    let maybe_nonce = extract_nonce_from_response(&resp)?;
+    match maybe_nonce {
+      Some(nonce) => Ok(nonce),
+      None => Err(anyhow::anyhow!("newNonce request must return a nonce")),
+    }
+  }
+
+  pub(crate) async fn authenticated_request<T>(
+    &mut self,
+    url: &str,
+    payload: Value,
+    pkey: PKey<Private>,
+    pkey_id: Option<String>,
+  ) -> Result<(T, reqwest::header::HeaderMap), Error>
+  where
+    T: DeserializeOwned,
+  {
+    let nonce = self.get_nonce().await?;
+
+    let body = jws(url, nonce, payload, pkey, pkey_id)?;
+
+    let resp = self
+      .http_client
+      .post(url)
+      .header(reqwest::header::CONTENT_TYPE, "application/jose+json")
+      .body(body)
+      .send()
+      .await?;
+
+    if let Some(nonce) = extract_nonce_from_response(&resp)? {
+      self.nonce = Some(nonce)
+    }
+
+    let headers = resp.headers().clone();
+
+    let text = resp.text().await?;
+    println!("text {}", text);
+
+    Ok((serde_json::from_str(&text)?, headers))
+  }
+}

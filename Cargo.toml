@@ -10,6 +10,7 @@ repository = "https://github.com/cyclopunk/acme2-slim"
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0.34"
 error-chain = "0.12"
 log = "0.4"
 serde = {version = "1.0.117", features=["derive"]}
