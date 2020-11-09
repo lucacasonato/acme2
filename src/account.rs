@@ -6,8 +6,9 @@ use openssl::pkey::PKey;
 use openssl::pkey::Private;
 use serde::Deserialize;
 use serde_json::json;
+use std::rc::Rc;
 
-#[derive(Deserialize, Eq, PartialEq, Debug)]
+#[derive(Deserialize, Eq, PartialEq, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 /// The status of this account.  Possible values are "valid", "deactivated",
 /// and "revoked". The value "deactivated" should be used to indicate client-
@@ -19,11 +20,14 @@ pub enum AccountStatus {
   Revoked,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 /// An ACME account resource represents a set of metadata associated with an
 /// account.
 pub struct Account {
+  #[serde(skip)]
+  pub(crate) directory: Option<Rc<Directory>>,
+
   #[serde(skip)]
   pub(crate) private_key: Option<PKey<Private>>,
   #[serde(skip)]
@@ -47,8 +51,8 @@ pub struct Account {
 }
 
 #[derive(Debug)]
-pub struct AccountBuilder<'a> {
-  directory: &'a mut Directory,
+pub struct AccountBuilder {
+  directory: Rc<Directory>,
 
   private_key: Option<PKey<Private>>,
 
@@ -58,8 +62,8 @@ pub struct AccountBuilder<'a> {
   // TODO(lucacasonato): externalAccountBinding
 }
 
-impl<'a> AccountBuilder<'a> {
-  pub fn new(directory: &'a mut Directory) -> Self {
+impl AccountBuilder {
+  pub fn new(directory: Rc<Directory>) -> Self {
     AccountBuilder {
       directory,
       private_key: None,
@@ -95,7 +99,7 @@ impl<'a> AccountBuilder<'a> {
     self
   }
 
-  pub async fn build(&mut self) -> Result<Account, Error> {
+  pub async fn build(&mut self) -> Result<Rc<Account>, Error> {
     let private_key = if let Some(private_key) = self.private_key.clone() {
       private_key
     } else {
@@ -128,8 +132,9 @@ impl<'a> AccountBuilder<'a> {
       .to_str()?
       .to_string();
 
+    acc.directory = Some(self.directory.clone());
     acc.private_key = Some(private_key);
     acc.private_key_id = private_key_id;
-    Ok(acc)
+    Ok(Rc::new(acc))
   }
 }

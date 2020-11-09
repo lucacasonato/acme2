@@ -11,6 +11,7 @@ pub use order::*;
 #[cfg(test)]
 mod tests {
   use crate::*;
+  use std::rc::Rc;
 
   async fn pebble_http_client() -> reqwest::Client {
     let raw = tokio::fs::read("./certs/pebble.minica.pem").await.unwrap();
@@ -21,7 +22,7 @@ mod tests {
       .unwrap()
   }
 
-  async fn pebble_directory() -> Directory {
+  async fn pebble_directory() -> Rc<Directory> {
     let http_client = pebble_http_client().await;
 
     DirectoryBuilder::new("https://localhost:14000/dir".to_string())
@@ -29,6 +30,20 @@ mod tests {
       .build()
       .await
       .unwrap()
+  }
+
+  async fn pebble_account() -> Rc<Account> {
+    let dir = pebble_directory().await;
+    let mut builder = AccountBuilder::new(dir);
+
+    let account = builder
+      .contact(vec!["mailto:hello@lcas.dev".to_string()])
+      .terms_of_service_agreed(true)
+      .build()
+      .await
+      .unwrap();
+
+    account
   }
 
   #[tokio::test]
@@ -40,7 +55,7 @@ mod tests {
     .await
     .unwrap();
 
-    let meta = dir.meta.unwrap();
+    let meta = dir.meta.clone().unwrap();
 
     assert_eq!(
       meta.caa_identities,
@@ -56,7 +71,7 @@ mod tests {
   async fn test_client_creation_pebble() {
     let dir = pebble_directory().await;
 
-    let meta = dir.meta.unwrap();
+    let meta = dir.meta.clone().unwrap();
 
     assert_eq!(meta.caa_identities, None);
     assert_eq!(meta.website, None);
@@ -64,16 +79,18 @@ mod tests {
 
   #[tokio::test]
   async fn test_account_creation_pebble() {
-    let mut dir = pebble_directory().await;
+    let dir = pebble_directory().await;
 
-    let account = AccountBuilder::new(&mut dir)
+    let mut builder = AccountBuilder::new(dir.clone());
+    let account = builder
       .contact(vec!["mailto:hello@lcas.dev".to_string()])
       .terms_of_service_agreed(true)
       .build()
       .await
       .unwrap();
 
-    let account2 = AccountBuilder::new(&mut dir)
+    let mut builder = AccountBuilder::new(dir);
+    let account2 = builder
       .contact(vec!["mailto:hello@lcas.dev".to_string()])
       .terms_of_service_agreed(true)
       .build()
@@ -82,5 +99,19 @@ mod tests {
 
     assert_eq!(account.status, AccountStatus::Valid);
     assert_eq!(account2.status, AccountStatus::Valid);
+  }
+
+  #[tokio::test]
+  async fn test_order_pebble() {
+    let account = pebble_account().await;
+
+    let mut builder = OrderBuilder::new(account);
+    let order = builder
+      .add_dns_identifier("acme2-slim.lcas.dev".to_string())
+      .build()
+      .await
+      .unwrap();
+
+    assert_eq!(order.status, OrderStatus::Pending);
   }
 }

@@ -2,7 +2,7 @@ use anyhow::Error;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Identifier {
   #[serde(rename = "type")]

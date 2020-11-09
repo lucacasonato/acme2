@@ -6,6 +6,7 @@ use openssl::pkey::Private;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
+use std::rc::Rc;
 
 pub struct DirectoryBuilder {
   url: String,
@@ -25,7 +26,7 @@ impl DirectoryBuilder {
     self
   }
 
-  pub async fn build(&mut self) -> Result<Directory, Error> {
+  pub async fn build(&mut self) -> Result<Rc<Directory>, Error> {
     let http_client = self
       .http_client
       .clone()
@@ -38,9 +39,9 @@ impl DirectoryBuilder {
     let mut dir = res?;
 
     dir.http_client = http_client;
-    dir.nonce = None;
+    // dir.nonce = None;
 
-    Ok(dir)
+    Ok(Rc::new(dir))
   }
 }
 
@@ -49,9 +50,9 @@ impl DirectoryBuilder {
 pub struct Directory {
   #[serde(skip)]
   pub(crate) http_client: reqwest::Client,
-  #[serde(skip)]
-  pub(crate) nonce: Option<String>,
-
+  // TODO(lucacasonato): handle nonce efficiently
+  // #[serde(skip)]
+  // pub(crate) nonce: Option<String>,
   #[serde(rename = "newNonce")]
   pub(crate) new_nonce_url: String,
   #[serde(rename = "newAccount")]
@@ -91,11 +92,11 @@ fn extract_nonce_from_response(
 }
 
 impl Directory {
-  pub(crate) async fn get_nonce(&mut self) -> Result<String, Error> {
-    if let Some(nonce) = self.nonce.clone() {
-      self.nonce = None;
-      return Ok(nonce);
-    }
+  pub(crate) async fn get_nonce(&self) -> Result<String, Error> {
+    // if let Some(nonce) = self.nonce.clone() {
+    //   self.nonce = None;
+    //   return Ok(nonce);
+    // }
 
     let resp = self.http_client.get(&self.new_nonce_url).send().await?;
     let maybe_nonce = extract_nonce_from_response(&resp)?;
@@ -106,7 +107,7 @@ impl Directory {
   }
 
   pub(crate) async fn authenticated_request<T>(
-    &mut self,
+    &self,
     url: &str,
     payload: Value,
     pkey: PKey<Private>,
@@ -127,9 +128,9 @@ impl Directory {
       .send()
       .await?;
 
-    if let Some(nonce) = extract_nonce_from_response(&resp)? {
-      self.nonce = Some(nonce)
-    }
+    // if let Some(nonce) = extract_nonce_from_response(&resp)? {
+    //   self.nonce = Some(nonce)
+    // }
 
     let headers = resp.headers().clone();
 
