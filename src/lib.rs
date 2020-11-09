@@ -218,16 +218,6 @@ struct Identifier {
     value: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-struct FinalizeResponse {
-    status: String,
-    finalize: String,
-    certificate: String,
-    expires: String,
-    authorizations: Vec<String>,
-    identifiers: Vec<Identifier>,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateOrderResponse {
     finalize_url: String,
@@ -251,12 +241,13 @@ pub struct NewOrderRequest {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct NewOrderResponse {
+pub struct OrderResponse {
     status: String,
     expires: String,
     identifiers: Vec<Identifier>,
     authorizations: Vec<String>,
     finalize: String,
+    certificate: Option<String>,
 }
 
 impl Account {
@@ -285,7 +276,7 @@ impl Account {
         };
         let directory = self.directory().clone();
 
-        let new_order: NewOrderResponse = directory
+        let new_order: OrderResponse = directory
             .request(self, &directory.resources.new_order, req)
             .await?;
 
@@ -400,7 +391,7 @@ mod tests {
         let signer = account.certificate_signer();
 
         signer
-            .sign_certificate(&order)
+            .sign_certificate(&order, Duration::from_secs(5))
             .await
             .unwrap()
             .save_signed_certificate("tests/cert.pem")

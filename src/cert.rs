@@ -1,13 +1,14 @@
-use crate::FinalizeResponse;
 use crate::{error::Result, helper::*, Account};
-use crate::{jwt::Jws, CreateOrderResponse};
+use crate::{jwt::Jws, CreateOrderResponse, OrderResponse};
 use log::info;
 use openssl::x509::X509;
 use openssl::{pkey::PKey, x509::X509Req};
-use reqwest::{header::CONTENT_TYPE, Response};
+use reqwest::header::CONTENT_TYPE;
+use reqwest::header::LOCATION;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio::fs;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
@@ -67,7 +68,11 @@ impl<'a> CertificateSigner<'a> {
     /// Signs certificate.
     ///
     /// CSR and PKey will be generated if it doesn't set or loaded first.
-    pub async fn sign_certificate(self, order: &CreateOrderResponse) -> Result<SignedCertificate> {
+    pub async fn sign_certificate(
+        self,
+        order: &CreateOrderResponse,
+        poll_interval: Duration,
+    ) -> Result<SignedCertificate> {
         info!("Signing certificate");
         let domains: Vec<&str> = order.domains.iter().map(|s| &s[..]).collect();
 
@@ -90,30 +95,49 @@ impl<'a> CertificateSigner<'a> {
             .send()
             .await?;
 
-        let finalize_response = FinalizeResponse::from_response(resp).await?;
+        let location = resp
+            .headers()
+            .get(LOCATION)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let mut order_response: OrderResponse = resp.json().await?;
+
+        while order_response.status == "processing" || order_response.certificate.is_none() {
+            tokio::time::delay_for(poll_interval).await;
+
+            let jws = Jws::new(&location, &self.account, "").await?.to_string()?;
+
+            let resp = client
+                .post(&location)
+                .header(CONTENT_TYPE, "application/jose+json")
+                .body(jws)
+                .send()
+                .await?;
+
+            order_response = resp.json().await?;
+        }
 
         Ok(SignedCertificate {
-            certs: finalize_response.get_certificates(&self.account).await?,
+            certs: order_response.get_certificates(&self.account).await?,
             csr,
             pkey,
         })
     }
 }
 
-impl FinalizeResponse {
-    async fn from_response(res: Response) -> Result<Self> {
-        Ok(res.json().await?)
-    }
-
+impl OrderResponse {
     async fn get_certificates(&self, account: &Account) -> Result<Vec<X509>> {
         let client = client()?;
 
-        let jws = Jws::new(&self.certificate, &account, "")
+        let jws = Jws::new(&self.certificate.clone().unwrap(), &account, "")
             .await?
             .to_string()?;
 
         let cert_resp = client
-            .post(&self.certificate)
+            .post(&self.certificate.clone().unwrap())
             .header(CONTENT_TYPE, "application/jose+json")
             .body(jws)
             .send()

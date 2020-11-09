@@ -48,18 +48,16 @@ pub(crate) fn gen_csr(pkey: &PKey<openssl::pkey::Private>, domains: &[&str]) -> 
 
     // if more than one domain name is supplied
     // add them as SubjectAlternativeName
-    if domains.len() > 1 {
-        let san_extension = {
-            let mut san = SubjectAlternativeName::new();
-            for domain in domains.iter() {
-                san.dns(domain);
-            }
-            san.build(&builder.x509v3_context(None))?
-        };
-        let mut stack = Stack::new()?;
-        stack.push(san_extension)?;
-        builder.add_extensions(&stack)?;
-    }
+    let san_extension = {
+        let mut san = SubjectAlternativeName::new();
+        for domain in domains.iter() {
+            san.dns(domain);
+        }
+        san.build(&builder.x509v3_context(None))?
+    };
+    let mut stack = Stack::new()?;
+    stack.push(san_extension)?;
+    builder.add_extensions(&stack)?;
 
     builder.set_pubkey(&pkey)?;
     builder.sign(pkey, MessageDigest::sha256())?;

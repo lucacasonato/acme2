@@ -2,6 +2,7 @@ use crate::Account;
 use crate::Identifier;
 use crate::Path;
 use crate::{jwt::Jws, CONTENT_TYPE};
+use serde_json::json;
 use std::time::Duration;
 
 use crate::helper::*;
@@ -93,17 +94,7 @@ impl Challenge {
 
     /// Triggers validation.
     pub async fn validate(&self, account: &Account, poll_interval: Duration) -> Result<()> {
-        let payload = Jws::new(
-            &self.url,
-            account,
-            ValidatePayload {
-                ctype: self.ctype.clone(),
-                token: self.token.clone(),
-                resource: "challenge".into(),
-                key_authorization: self.key_authorization().to_string(),
-            },
-        )
-        .await?;
+        let payload = Jws::new(&self.url, account, json!({})).await?;
 
         let client = client()?;
 

@@ -23,10 +23,10 @@ struct RegisterRequest {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RegisterResult {
-    contact: Vec<String>,
-    initial_ip: String,
-    created_at: String,
     status: String,
+    contact: Option<Vec<String>>,
+    initial_ip: Option<String>,
+    created_at: Option<String>,
     #[serde(flatten)]
     key: HashMap<String, serde_json::Value>,
 }
@@ -34,10 +34,10 @@ struct RegisterResult {
 impl Default for RegisterResult {
     fn default() -> Self {
         RegisterResult {
-            contact: Vec::default(),
-            initial_ip: String::default(),
-            created_at: String::default(),
             status: String::default(),
+            contact: None,
+            initial_ip: None,
+            created_at: None,
             key: HashMap::default(),
         }
     }
