@@ -89,7 +89,7 @@ mod tests {
       .await
       .unwrap();
 
-    let mut builder = AccountBuilder::new(dir);
+    let mut builder = AccountBuilder::new(dir.clone());
     let account2 = builder
       .contact(vec!["mailto:hello@lcas.dev".to_string()])
       .terms_of_service_agreed(true)

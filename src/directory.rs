@@ -6,6 +6,7 @@ use openssl::pkey::Private;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 pub struct DirectoryBuilder {
@@ -39,7 +40,7 @@ impl DirectoryBuilder {
     let mut dir = res?;
 
     dir.http_client = http_client;
-    // dir.nonce = None;
+    dir.nonce = RefCell::new(None);
 
     Ok(Rc::new(dir))
   }
@@ -50,9 +51,8 @@ impl DirectoryBuilder {
 pub struct Directory {
   #[serde(skip)]
   pub(crate) http_client: reqwest::Client,
-  // TODO(lucacasonato): handle nonce efficiently
-  // #[serde(skip)]
-  // pub(crate) nonce: Option<String>,
+  #[serde(skip)]
+  pub(crate) nonce: RefCell<Option<String>>,
   #[serde(rename = "newNonce")]
   pub(crate) new_nonce_url: String,
   #[serde(rename = "newAccount")]
@@ -93,11 +93,14 @@ fn extract_nonce_from_response(
 
 impl Directory {
   pub(crate) async fn get_nonce(&self) -> Result<String, Error> {
-    // if let Some(nonce) = self.nonce.clone() {
-    //   self.nonce = None;
-    //   return Ok(nonce);
-    // }
+    let maybe_nonce = self.nonce.try_borrow()?.clone();
+    if let Some(nonce) = maybe_nonce {
+      println!("reused nonce");
+      self.nonce.replace(None);
+      return Ok(nonce);
+    }
 
+    println!("fresh nonce");
     let resp = self.http_client.get(&self.new_nonce_url).send().await?;
     let maybe_nonce = extract_nonce_from_response(&resp)?;
     match maybe_nonce {
@@ -128,14 +131,14 @@ impl Directory {
       .send()
       .await?;
 
-    // if let Some(nonce) = extract_nonce_from_response(&resp)? {
-    //   self.nonce = Some(nonce)
-    // }
+    if let Some(nonce) = extract_nonce_from_response(&resp)? {
+      self.nonce.replace(Some(nonce));
+    }
 
     let headers = resp.headers().clone();
 
     let text = resp.text().await?;
-    println!("text {}", text);
+    // println!("text {}", text);
 
     Ok((serde_json::from_str(&text)?, headers))
   }
