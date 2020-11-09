@@ -110,7 +110,7 @@ impl AccountBuilder {
 
     let (res, headers) = self
       .directory
-      .authenticated_request::<AcmeResult<Account>>(
+      .authenticated_request::<_, AcmeResult<Account>>(
         &url,
         json!({
           "contact": self.contact,

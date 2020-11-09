@@ -5,7 +5,7 @@ use openssl::pkey::PKey;
 use openssl::pkey::Private;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use serde_json::Value;
+use serde::Serialize;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -109,15 +109,16 @@ impl Directory {
     }
   }
 
-  pub(crate) async fn authenticated_request<T>(
+  pub(crate) async fn authenticated_request<T, R>(
     &self,
     url: &str,
-    payload: Value,
+    payload: T,
     pkey: PKey<Private>,
     pkey_id: Option<String>,
-  ) -> Result<(T, reqwest::header::HeaderMap), Error>
+  ) -> Result<(R, reqwest::header::HeaderMap), Error>
   where
-    T: DeserializeOwned,
+    T: Serialize,
+    R: DeserializeOwned,
   {
     let nonce = self.get_nonce().await?;
 

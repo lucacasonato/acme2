@@ -1,10 +1,12 @@
 mod account;
+mod authorization;
 mod directory;
 mod jws;
 mod order;
 mod resources;
 
 pub use account::*;
+pub use authorization::*;
 pub use directory::*;
 pub use order::*;
 
@@ -111,6 +113,10 @@ mod tests {
       .build()
       .await
       .unwrap();
+
+    let authorizations = order.authorizations().await.unwrap();
+
+    println!("{:#?}", authorizations);
 
     assert_eq!(order.status, OrderStatus::Pending);
   }

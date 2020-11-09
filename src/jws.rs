@@ -50,6 +50,11 @@ where
   T: Serialize,
 {
   let payload = serde_json::to_string(&payload)?;
+  let payload = if payload == "\"\"" {
+    "".to_string()
+  } else {
+    payload
+  };
   let payload_b64 = b64(&payload.into_bytes());
 
   let mut header = JwsHeader::default();

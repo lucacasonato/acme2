@@ -22,6 +22,9 @@ pub enum OrderStatus {
 /// An ACME order object represents a client's request for a certificate
 /// and is used to track the progress of that order through to issuance.
 pub struct Order {
+  #[serde(skip)]
+  pub(crate) account: Option<Rc<Account>>,
+
   /// The status of this order.
   pub status: OrderStatus,
   /// The timestamp after which the server will consider this order
@@ -83,7 +86,7 @@ impl OrderBuilder {
     let url = dir.new_order_url.clone();
 
     let (res, _) = dir
-      .authenticated_request::<AcmeResult<Order>>(
+      .authenticated_request::<_, AcmeResult<Order>>(
         &url,
         json!({
           "identifiers": self.identifiers,
@@ -93,6 +96,11 @@ impl OrderBuilder {
       )
       .await?;
 
-    res.into()
+    let res: Result<Order, Error> = res.into();
+    let mut order = res?;
+
+    order.account = Some(self.account.clone());
+
+    Ok(order)
   }
 }
