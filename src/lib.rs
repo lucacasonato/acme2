@@ -128,16 +128,6 @@ mod tests {
           assert_eq!(challenge.status, ChallengeStatus::Pending);
 
           client
-            .post("http://localhost:8055/add-a")
-            .json(&json!({
-              "host": "test-order-http01-challenge-pebble.lcas.dev",
-              "addresses": ["127.0.0.1"]
-            }))
-            .send()
-            .await
-            .unwrap();
-
-          client
             .post("http://localhost:8055/add-http01")
             .json(&json!({
               "token": challenge.token,
@@ -156,15 +146,6 @@ mod tests {
           client
             .post("http://localhost:8055/del-http01")
             .json(&json!({ "token": challenge.token }))
-            .send()
-            .await
-            .unwrap();
-
-          client
-            .post("http://localhost:8055/clear-a")
-            .json(
-              &json!({ "host": "test-order-http01-challenge-pebble.lcas.dev" }),
-            )
             .send()
             .await
             .unwrap();

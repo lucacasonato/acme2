@@ -12,13 +12,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-      services:
-        pebble:
-          image: letsencrypt/pebble
-          ports:
-            - 14000:14000
-            - 15000:15000
-    
     steps:
       - uses: actions/checkout@v2
       - name: Install rust
@@ -44,5 +37,7 @@ jobs:
           cargo clippy --all-targets --locked --release -- -D clippy::all
       - name: Build
         run: cargo build --verbose
+      - name: Start pebble
+        run: docker-compose up -d
       - name: Run tests
         run: cargo test --verbose
