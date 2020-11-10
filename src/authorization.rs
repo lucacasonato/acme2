@@ -77,6 +77,8 @@ pub struct Challenge {
   /// The time at which the server validated this challenge.
   pub validated: Option<String>,
 
+  /// Error that occurred while the server was validating the
+  /// challenge, if any.
   pub error: Option<AcmeError>,
 
   /// A random value that uniquely identifies the challenge.

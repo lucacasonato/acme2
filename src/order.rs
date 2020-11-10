@@ -47,6 +47,10 @@ pub struct Order {
   pub not_before: Option<String>,
   /// The requested value of the notAfter field in the certificate.
   pub not_after: Option<String>,
+
+  /// The error that occurred while processing the order, if any.
+  pub error: Option<AcmeError>,
+
   #[serde(rename = "authorizations")]
   /// For pending orders, the authorizations that the client needs to
   /// complete before the requested certificate can be issued. For
