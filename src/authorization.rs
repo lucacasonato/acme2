@@ -91,10 +91,8 @@ impl Order {
     let mut authorizations = vec![];
 
     for authorization_url in self.authorization_urls.clone() {
-      println!("{}", authorization_url);
-
       let (res, _) = directory
-        .authenticated_request::<_, AcmeResult<Authorization>>(
+        .authenticated_request::<_, Authorization>(
           &authorization_url,
           "",
           account.private_key.clone().unwrap(),
@@ -123,7 +121,7 @@ impl Authorization {
     let directory = account.directory.clone().unwrap();
 
     let (res, _) = directory
-      .authenticated_request::<_, AcmeResult<Authorization>>(
+      .authenticated_request::<_, Authorization>(
         &self.url,
         json!(""),
         account.private_key.clone().unwrap(),
@@ -137,7 +135,7 @@ impl Authorization {
     Ok(authorization)
   }
 
-  pub async fn poll_ready(
+  pub async fn poll_done(
     self,
     poll_interval: Duration,
   ) -> Result<Authorization, Error> {
@@ -180,7 +178,7 @@ impl Challenge {
     let directory = account.directory.clone().unwrap();
 
     let (res, _) = directory
-      .authenticated_request::<_, AcmeResult<Challenge>>(
+      .authenticated_request::<_, Challenge>(
         &self.url,
         json!({}),
         account.private_key.clone().unwrap(),
@@ -199,7 +197,7 @@ impl Challenge {
     let directory = account.directory.clone().unwrap();
 
     let (res, _) = directory
-      .authenticated_request::<_, AcmeResult<Challenge>>(
+      .authenticated_request::<_, Challenge>(
         &self.url,
         json!(""),
         account.private_key.clone().unwrap(),
@@ -212,7 +210,7 @@ impl Challenge {
     Ok(challenge)
   }
 
-  pub async fn poll_ready(
+  pub async fn poll_done(
     self,
     poll_interval: Duration,
   ) -> Result<Challenge, Error> {

@@ -95,12 +95,10 @@ impl Directory {
   pub(crate) async fn get_nonce(&self) -> Result<String, Error> {
     let maybe_nonce = self.nonce.try_borrow()?.clone();
     if let Some(nonce) = maybe_nonce {
-      println!("reused nonce");
       self.nonce.replace(None);
       return Ok(nonce);
     }
 
-    println!("fresh nonce");
     let resp = self.http_client.get(&self.new_nonce_url).send().await?;
     let maybe_nonce = extract_nonce_from_response(&resp)?;
     match maybe_nonce {
@@ -109,21 +107,15 @@ impl Directory {
     }
   }
 
-  pub(crate) async fn authenticated_request<T, R>(
+  pub(crate) async fn authenticated_request_raw(
     &self,
     url: &str,
-    payload: T,
-    pkey: PKey<Private>,
-    pkey_id: Option<String>,
-  ) -> Result<(R, reqwest::header::HeaderMap), Error>
-  where
-    T: Serialize,
-    R: DeserializeOwned,
-  {
+    payload: &str,
+    pkey: &PKey<Private>,
+    pkey_id: &Option<String>,
+  ) -> Result<reqwest::Response, Error> {
     let nonce = self.get_nonce().await?;
-
-    let body = jws(url, nonce, payload, pkey, pkey_id)?;
-
+    let body = jws(url, nonce, &payload, pkey, pkey_id.clone())?;
     let resp = self
       .http_client
       .post(url)
@@ -136,11 +128,54 @@ impl Directory {
       self.nonce.replace(Some(nonce));
     }
 
-    let headers = resp.headers().clone();
+    Ok(resp)
+  }
 
-    let text = resp.text().await?;
-    // println!("text {}", text);
+  pub(crate) async fn authenticated_request<T, R>(
+    &self,
+    url: &str,
+    payload: T,
+    pkey: PKey<Private>,
+    pkey_id: Option<String>,
+  ) -> Result<(AcmeResult<R>, reqwest::header::HeaderMap), Error>
+  where
+    T: Serialize,
+    R: DeserializeOwned,
+  {
+    let mut attempt = 0;
+    let payload = serde_json::to_string(&payload)?;
+    let payload = if payload == "\"\"" {
+      "".to_string()
+    } else {
+      payload
+    };
 
-    Ok((serde_json::from_str(&text)?, headers))
+    loop {
+      attempt += 1;
+
+      let resp = self
+        .authenticated_request_raw(url, &payload, &pkey, &pkey_id)
+        .await?;
+
+      let headers = resp.headers().clone();
+
+      let res: AcmeResult<R> = resp.json().await?;
+
+      let res = match res {
+        AcmeResult::Err(err) => {
+          if let Some(typ) = err.typ.clone() {
+            if &typ == "urn:ietf:params:acme:error:badNonce" {
+              if attempt <= 3 {
+                continue;
+              }
+            }
+          }
+          AcmeResult::Err(err)
+        }
+        AcmeResult::Ok(ok) => AcmeResult::Ok(ok),
+      };
+
+      return Ok((res, headers));
+    }
   }
 }

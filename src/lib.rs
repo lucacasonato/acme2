@@ -8,6 +8,7 @@ mod resources;
 pub use account::*;
 pub use authorization::*;
 pub use directory::*;
+pub use jws::gen_rsa_private_key;
 pub use order::*;
 
 #[cfg(test)]
@@ -111,7 +112,9 @@ mod tests {
 
     let mut builder = OrderBuilder::new(account);
     let order = builder
-      .add_dns_identifier("test.acme2-slim.lcas.dev".to_string())
+      .add_dns_identifier(
+        "test-order-http01-challenge-pebble.lcas.dev".to_string(),
+      )
       .build()
       .await
       .unwrap();
@@ -127,7 +130,7 @@ mod tests {
           client
             .post("http://localhost:8055/add-a")
             .json(&json!({
-              "host": "test.acme2-slim.lcas.dev",
+              "host": "test-order-http01-challenge-pebble.lcas.dev",
               "addresses": ["127.0.0.1"]
             }))
             .send()
@@ -146,17 +149,46 @@ mod tests {
 
           let challenge = challenge.validate().await.unwrap();
           let challenge =
-            challenge.poll_ready(Duration::from_secs(5)).await.unwrap();
+            challenge.poll_done(Duration::from_secs(5)).await.unwrap();
 
           assert_eq!(challenge.status, ChallengeStatus::Valid);
+
+          client
+            .post("http://localhost:8055/del-http01")
+            .json(&json!({ "token": challenge.token }))
+            .send()
+            .await
+            .unwrap();
+
+          client
+            .post("http://localhost:8055/clear-a")
+            .json(
+              &json!({ "host": "test-order-http01-challenge-pebble.lcas.dev" }),
+            )
+            .send()
+            .await
+            .unwrap();
         }
       }
 
-      let authorization =
-        auth.poll_ready(Duration::from_secs(5)).await.unwrap();
+      let authorization = auth.poll_done(Duration::from_secs(5)).await.unwrap();
       assert_eq!(authorization.status, AuthorizationStatus::Valid)
     }
 
     assert_eq!(order.status, OrderStatus::Pending);
+
+    let order = order.poll_ready(Duration::from_secs(5)).await.unwrap();
+
+    assert_eq!(order.status, OrderStatus::Ready);
+
+    let pkey = gen_rsa_private_key(4096).unwrap();
+    let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
+
+    let order = order.poll_done(Duration::from_secs(5)).await.unwrap();
+
+    assert_eq!(order.status, OrderStatus::Valid);
+
+    let cert = order.certificate().await.unwrap().unwrap();
+    assert!(cert.len() > 1);
   }
 }

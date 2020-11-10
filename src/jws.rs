@@ -39,23 +39,14 @@ impl Jwk {
   }
 }
 
-pub(crate) fn jws<T>(
+pub(crate) fn jws(
   url: &str,
   nonce: String,
-  payload: T,
-  pkey: PKey<Private>,
+  payload: &str,
+  pkey: &PKey<Private>,
   pkey_id: Option<String>,
-) -> Result<String, anyhow::Error>
-where
-  T: Serialize,
-{
-  let payload = serde_json::to_string(&payload)?;
-  let payload = if payload == "\"\"" {
-    "".to_string()
-  } else {
-    payload
-  };
-  let payload_b64 = b64(&payload.into_bytes());
+) -> Result<String, anyhow::Error> {
+  let payload_b64 = b64(&payload.as_bytes());
 
   let mut header = JwsHeader::default();
   header.nonce = nonce;
@@ -71,7 +62,7 @@ where
   let protected_b64 = b64(&serde_json::to_string(&header)?.into_bytes());
 
   let signature_b64 = {
-    let mut signer = Signer::new(MessageDigest::sha256(), &pkey)?;
+    let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
     signer
       .update(&format!("{}.{}", protected_b64, payload_b64).into_bytes())?;
     b64(&signer.sign_to_vec()?)
@@ -84,8 +75,10 @@ where
   }))?)
 }
 
-pub(crate) fn gen_pkey() -> Result<PKey<Private>, anyhow::Error> {
-  let rsa = Rsa::generate(4096)?;
+pub fn gen_rsa_private_key(
+  bits: u32,
+) -> Result<PKey<Private>, anyhow::Error> {
+  let rsa = Rsa::generate(bits)?;
   let key = PKey::from_rsa(rsa)?;
   Ok(key)
 }

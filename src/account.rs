@@ -1,6 +1,5 @@
 use crate::directory::Directory;
-use crate::jws::gen_pkey;
-use crate::resources::*;
+use crate::jws::gen_rsa_private_key;
 use anyhow::Error;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
@@ -103,14 +102,14 @@ impl AccountBuilder {
     let private_key = if let Some(private_key) = self.private_key.clone() {
       private_key
     } else {
-      gen_pkey()?
+      gen_rsa_private_key(4096)?
     };
 
     let url = self.directory.new_account_url.clone();
 
     let (res, headers) = self
       .directory
-      .authenticated_request::<_, AcmeResult<Account>>(
+      .authenticated_request::<_, Account>(
         &url,
         json!({
           "contact": self.contact,
