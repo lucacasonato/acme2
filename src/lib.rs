@@ -13,7 +13,9 @@ pub use order::*;
 #[cfg(test)]
 mod tests {
   use crate::*;
+  use serde_json::json;
   use std::rc::Rc;
+  use std::time::Duration;
 
   async fn pebble_http_client() -> reqwest::Client {
     let raw = tokio::fs::read("./certs/pebble.minica.pem").await.unwrap();
@@ -104,19 +106,56 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn test_order_pebble() {
+  async fn test_order_http01_challenge_pebble() {
     let account = pebble_account().await;
 
     let mut builder = OrderBuilder::new(account);
     let order = builder
-      .add_dns_identifier("acme2-slim.lcas.dev".to_string())
+      .add_dns_identifier("test.acme2-slim.lcas.dev".to_string())
       .build()
       .await
       .unwrap();
 
     let authorizations = order.authorizations().await.unwrap();
 
-    println!("{:#?}", authorizations);
+    let client = pebble_http_client().await;
+    for auth in authorizations {
+      for challenge in &auth.challenges {
+        if challenge.typ == "http-01" {
+          assert_eq!(challenge.status, ChallengeStatus::Pending);
+
+          client
+            .post("http://localhost:8055/add-a")
+            .json(&json!({
+              "host": "test.acme2-slim.lcas.dev",
+              "addresses": ["127.0.0.1"]
+            }))
+            .send()
+            .await
+            .unwrap();
+
+          client
+            .post("http://localhost:8055/add-http01")
+            .json(&json!({
+              "token": challenge.token,
+              "content": challenge.key_authorization().unwrap().unwrap()
+            }))
+            .send()
+            .await
+            .unwrap();
+
+          let challenge = challenge.validate().await.unwrap();
+          let challenge =
+            challenge.poll_ready(Duration::from_secs(5)).await.unwrap();
+
+          assert_eq!(challenge.status, ChallengeStatus::Valid);
+        }
+      }
+
+      let authorization =
+        auth.poll_ready(Duration::from_secs(5)).await.unwrap();
+      assert_eq!(authorization.status, AuthorizationStatus::Valid)
+    }
 
     assert_eq!(order.status, OrderStatus::Pending);
   }

@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 
-fn b64(data: &[u8]) -> String {
+pub(crate) fn b64(data: &[u8]) -> String {
   base64::encode_config(data, ::base64::URL_SAFE_NO_PAD)
 }
 
@@ -23,7 +23,7 @@ struct JwsHeader {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-struct Jwk {
+pub(crate) struct Jwk {
   e: String,
   kty: String,
   n: String,
@@ -39,7 +39,7 @@ impl Jwk {
   }
 }
 
-pub fn jws<T>(
+pub(crate) fn jws<T>(
   url: &str,
   nonce: String,
   payload: T,
