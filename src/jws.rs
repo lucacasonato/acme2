@@ -1,15 +1,11 @@
+use crate::helpers::*;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
-use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
-
-pub(crate) fn b64(data: &[u8]) -> String {
-  base64::encode_config(data, ::base64::URL_SAFE_NO_PAD)
-}
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 struct JwsHeader {
@@ -73,12 +69,4 @@ pub(crate) fn jws(
     "payload": payload_b64,
     "signature": signature_b64
   }))?)
-}
-
-pub fn gen_rsa_private_key(
-  bits: u32,
-) -> Result<PKey<Private>, anyhow::Error> {
-  let rsa = Rsa::generate(bits)?;
-  let key = PKey::from_rsa(rsa)?;
-  Ok(key)
 }

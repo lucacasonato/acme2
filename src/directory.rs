@@ -1,5 +1,5 @@
+use crate::helpers::*;
 use crate::jws::jws;
-use crate::resources::*;
 use anyhow::Error;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
@@ -31,7 +31,7 @@ impl DirectoryBuilder {
     let http_client = self
       .http_client
       .clone()
-      .unwrap_or_else(|| reqwest::Client::new());
+      .unwrap_or_else(reqwest::Client::new);
 
     let resp = http_client.get(&self.url).send().await?;
 
@@ -164,10 +164,8 @@ impl Directory {
       let res = match res {
         AcmeResult::Err(err) => {
           if let Some(typ) = err.typ.clone() {
-            if &typ == "urn:ietf:params:acme:error:badNonce" {
-              if attempt <= 3 {
-                continue;
-              }
+            if &typ == "urn:ietf:params:acme:error:badNonce" && attempt <= 3 {
+              continue;
             }
           }
           AcmeResult::Err(err)

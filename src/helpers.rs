@@ -1,4 +1,7 @@
 use anyhow::Error;
+use openssl::pkey::PKey;
+use openssl::pkey::Private;
+use openssl::rsa::Rsa;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -11,7 +14,6 @@ pub struct Identifier {
   /// The identifier itself.
   pub value: String,
 }
-
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -51,4 +53,14 @@ impl<T> Into<Result<T, Error>> for AcmeResult<T> {
       AcmeResult::Err(err) => Err(err.into()),
     }
   }
+}
+
+pub(crate) fn b64(data: &[u8]) -> String {
+  base64::encode_config(data, ::base64::URL_SAFE_NO_PAD)
+}
+
+pub fn gen_rsa_private_key(bits: u32) -> Result<PKey<Private>, anyhow::Error> {
+  let rsa = Rsa::generate(bits)?;
+  let key = PKey::from_rsa(rsa)?;
+  Ok(key)
 }

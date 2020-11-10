@@ -1,8 +1,8 @@
 use crate::account::Account;
-use crate::jws::b64;
+use crate::helpers::Identifier;
+use crate::helpers::*;
 use crate::jws::Jwk;
 use crate::order::Order;
-use crate::resources::*;
 use anyhow::Error;
 use openssl::hash::hash;
 use openssl::hash::MessageDigest;

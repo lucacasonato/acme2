@@ -1,5 +1,5 @@
 use crate::directory::Directory;
-use crate::jws::gen_rsa_private_key;
+use crate::helpers::*;
 use anyhow::Error;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
@@ -125,9 +125,9 @@ impl AccountBuilder {
 
     let private_key_id = headers
       .get(reqwest::header::LOCATION)
-      .ok_or(anyhow::anyhow!(
-        "mandatory location header in newAccount not present"
-      ))?
+      .ok_or_else(|| {
+        anyhow::anyhow!("mandatory location header in newAccount not present")
+      })?
       .to_str()?
       .to_string();
 

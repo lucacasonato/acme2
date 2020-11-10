@@ -1,6 +1,5 @@
 use crate::account::Account;
-use crate::jws::b64;
-use crate::resources::*;
+use crate::helpers::*;
 use anyhow::Error;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
@@ -112,9 +111,11 @@ impl OrderBuilder {
 
     let order_url = headers
       .get(reqwest::header::LOCATION)
-      .ok_or(anyhow::anyhow!(
-        "mandatory location header in newOrder response not present"
-      ))?
+      .ok_or_else(|| {
+        anyhow::anyhow!(
+          "mandatory location header in newOrder response not present"
+        )
+      })?
       .to_str()?
       .to_string();
 

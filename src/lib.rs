@@ -1,14 +1,16 @@
 mod account;
 mod authorization;
 mod directory;
+mod helpers;
 mod jws;
 mod order;
-mod resources;
 
 pub use account::*;
 pub use authorization::*;
 pub use directory::*;
-pub use jws::gen_rsa_private_key;
+pub use helpers::gen_rsa_private_key;
+pub use helpers::AcmeError;
+pub use helpers::Identifier;
 pub use order::*;
 
 #[cfg(test)]
