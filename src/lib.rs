@@ -125,34 +125,32 @@ mod tests {
 
     let client = pebble_http_client().await;
     for auth in authorizations {
-      for challenge in &auth.challenges {
-        if challenge.typ == "http-01" {
-          assert_eq!(challenge.status, ChallengeStatus::Pending);
+      let challenge = auth.get_challenge("http-01").unwrap();
 
-          client
-            .post("http://localhost:8055/add-http01")
-            .json(&json!({
-              "token": challenge.token,
-              "content": challenge.key_authorization().unwrap().unwrap()
-            }))
-            .send()
-            .await
-            .unwrap();
+      assert_eq!(challenge.status, ChallengeStatus::Pending);
 
-          let challenge = challenge.validate().await.unwrap();
-          let challenge =
-            challenge.poll_done(Duration::from_secs(5)).await.unwrap();
+      client
+        .post("http://localhost:8055/add-http01")
+        .json(&json!({
+          "token": challenge.token,
+          "content": challenge.key_authorization().unwrap().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
 
-          assert_eq!(challenge.status, ChallengeStatus::Valid);
+      let challenge = challenge.validate().await.unwrap();
+      let challenge =
+        challenge.poll_done(Duration::from_secs(5)).await.unwrap();
 
-          client
-            .post("http://localhost:8055/del-http01")
-            .json(&json!({ "token": challenge.token }))
-            .send()
-            .await
-            .unwrap();
-        }
-      }
+      assert_eq!(challenge.status, ChallengeStatus::Valid);
+
+      client
+        .post("http://localhost:8055/del-http01")
+        .json(&json!({ "token": challenge.token }))
+        .send()
+        .await
+        .unwrap();
 
       let authorization = auth.poll_done(Duration::from_secs(5)).await.unwrap();
       assert_eq!(authorization.status, AuthorizationStatus::Valid)

@@ -50,7 +50,7 @@ pub struct Authorization {
   pub wildcard: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[derive(Deserialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 /// The status of this challenge. Possible values are "pending",
 /// "processing", "valid", and "invalid".
@@ -61,7 +61,7 @@ pub enum ChallengeStatus {
   Invalid,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Challenge {
   #[serde(skip)]
@@ -118,6 +118,15 @@ impl Order {
 }
 
 impl Authorization {
+  pub fn get_challenge(&self, typ: &str) -> Option<Challenge> {
+    for challenge in &self.challenges {
+      if challenge.typ == typ {
+        return Some(challenge.clone());
+      }
+    }
+    None
+  }
+
   pub async fn poll(&self) -> Result<Authorization, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();

@@ -15,7 +15,7 @@ pub struct Identifier {
   pub value: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AcmeError {
   #[serde(rename = "type")]
