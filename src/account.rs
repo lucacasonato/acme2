@@ -6,6 +6,10 @@ use openssl::pkey::Private;
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
+use tracing::field;
+use tracing::instrument;
+use tracing::Level;
+use tracing::Span;
 
 #[derive(Deserialize, Eq, PartialEq, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +60,7 @@ pub struct AccountBuilder {
   private_key: Option<PKey<Private>>,
 
   contact: Option<Vec<String>>,
-  terms_of_service_aggreed: Option<bool>,
+  terms_of_service_agreed: Option<bool>,
   only_return_existing: Option<bool>,
   // TODO(lucacasonato): externalAccountBinding
 }
@@ -67,7 +71,7 @@ impl AccountBuilder {
       directory,
       private_key: None,
       contact: None,
-      terms_of_service_aggreed: None,
+      terms_of_service_agreed: None,
       only_return_existing: None,
     }
   }
@@ -86,7 +90,7 @@ impl AccountBuilder {
     &mut self,
     terms_of_service_agreed: bool,
   ) -> &mut Self {
-    self.terms_of_service_aggreed = Some(terms_of_service_agreed);
+    self.terms_of_service_agreed = Some(terms_of_service_agreed);
     self
   }
 
@@ -98,6 +102,7 @@ impl AccountBuilder {
     self
   }
 
+  #[instrument(level = Level::INFO, name = "acme2_slim::AccountBuilder::build", err, skip(self), fields(contact = ?self.contact, terms_of_service_agreed = ?self.terms_of_service_agreed, only_return_existing = ?self.only_return_existing, private_key_id = field::Empty))]
   pub async fn build(&mut self) -> Result<Arc<Account>, Error> {
     let private_key = if let Some(private_key) = self.private_key.clone() {
       private_key
@@ -113,7 +118,7 @@ impl AccountBuilder {
         &url,
         json!({
           "contact": self.contact,
-          "termsOfServiceAgreed": self.terms_of_service_aggreed,
+          "termsOfServiceAgreed": self.terms_of_service_agreed,
           "onlyReturnExisting": self.only_return_existing
         }),
         private_key.clone(),
@@ -130,6 +135,7 @@ impl AccountBuilder {
       })?
       .to_str()?
       .to_string();
+    Span::current().record("private_key_id", &field::display(&private_key_id));
 
     acc.directory = Some(self.directory.clone());
     acc.private_key = Some(private_key);

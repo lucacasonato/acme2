@@ -13,6 +13,11 @@ use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::debug;
+use tracing::field;
+use tracing::instrument;
+use tracing::Level;
+use tracing::Span;
 
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +101,7 @@ impl OrderBuilder {
     self
   }
 
+  #[instrument(level = Level::INFO, name = "acme2_slim::OrderBuilder::build", err, skip(self), fields(identifiers = ?self.identifiers, order_url = field::Empty))]
   pub async fn build(&mut self) -> Result<Order, Error> {
     let dir = self.account.directory.clone().unwrap();
 
@@ -122,6 +128,7 @@ impl OrderBuilder {
       })?
       .to_str()?
       .to_string();
+    Span::current().record("order_url", &field::display(&order_url));
 
     order.account = Some(self.account.clone());
     order.url = order_url;
@@ -172,6 +179,7 @@ fn gen_csr(
 }
 
 impl Order {
+  #[instrument(level = Level::INFO, name = "acme2_slim::Order::finalize", err, skip(self, csr), fields(order_url = %self.url, status = field::Empty))]
   pub async fn finalize(&self, csr: CSR) -> Result<Order, Error> {
     let csr = match csr {
       CSR::Automatic(pkey) => gen_csr(
@@ -200,12 +208,15 @@ impl Order {
       .await?;
     let res: Result<Order, Error> = res.into();
     let mut order = res?;
+    Span::current().record("status", &field::debug(&order.status));
     order.account = Some(account.clone());
     order.url = self.url.clone();
     Ok(order)
   }
 
+  #[instrument(level = Level::INFO, name = "acme2_slim::Order::certificate", err, skip(self), fields(order_url = %self.url, has_certificate = field::Empty))]
   pub async fn certificate(&self) -> Result<Option<Vec<X509>>, Error> {
+    Span::current().record("has_certificate", &self.certificate_url.is_some());
     let certificate_url = match self.certificate_url.clone() {
       Some(certificate_url) => certificate_url,
       None => return Ok(None),
@@ -228,6 +239,7 @@ impl Order {
     Ok(Some(X509::stack_from_pem(&bytes)?))
   }
 
+  #[instrument(level = Level::DEBUG, name = "acme2_slim::Order::poll", err, skip(self), fields(order_url = %self.url, status = field::Empty))]
   pub async fn poll(&self) -> Result<Order, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
@@ -242,18 +254,24 @@ impl Order {
       .await?;
     let res: Result<Order, Error> = res.into();
     let mut order = res?;
+    Span::current().record("status", &field::debug(&order.status));
     order.account = Some(account.clone());
     order.url = self.url.clone();
     Ok(order)
   }
 
-  pub async fn poll_ready(
+  #[instrument(level = Level::INFO, name = "acme2_slim::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
+  pub async fn wait_ready(
     self,
     poll_interval: Duration,
   ) -> Result<Order, Error> {
     let mut order = self;
 
     while order.status == OrderStatus::Pending {
+      debug!(
+        { delay = ?poll_interval },
+        "Order still pending. Waiting to poll."
+      );
       tokio::time::delay_for(poll_interval).await;
       order = order.poll().await?;
     }
@@ -261,7 +279,8 @@ impl Order {
     Ok(order)
   }
 
-  pub async fn poll_done(
+  #[instrument(level = Level::INFO, name = "acme2_slim::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
+  pub async fn wait_done(
     self,
     poll_interval: Duration,
   ) -> Result<Order, Error> {
@@ -271,6 +290,10 @@ impl Order {
       || order.status == OrderStatus::Ready
       || order.status == OrderStatus::Processing
     {
+      debug!(
+        { delay = ?poll_interval, status = ?order.status },
+        "Order not done. Waiting to poll."
+      );
       tokio::time::delay_for(poll_interval).await;
       order = order.poll().await?;
     }

@@ -8,6 +8,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::Mutex;
+use tracing::debug;
+use tracing::field;
+use tracing::instrument;
+use tracing::Level;
+use tracing::Span;
 
 pub struct DirectoryBuilder {
   url: String,
@@ -27,6 +32,13 @@ impl DirectoryBuilder {
     self
   }
 
+  #[instrument(
+    level = Level::INFO,
+    name = "acme2_slim::DirectoryBuilder::build",
+    err,
+    skip(self),
+    fields(url = %self.url, custom_http_client = self.http_client.is_some(), dir = field::Empty)
+  )]
   pub async fn build(&mut self) -> Result<Arc<Directory>, Error> {
     let http_client = self
       .http_client
@@ -38,6 +50,7 @@ impl DirectoryBuilder {
     let res: Result<Directory, Error> =
       resp.json::<AcmeResult<Directory>>().await?.into();
     let mut dir = res?;
+    Span::current().record("dir", &field::debug(&dir));
 
     dir.http_client = http_client;
     dir.nonce = Mutex::new(None);
@@ -92,15 +105,23 @@ fn extract_nonce_from_response(
 }
 
 impl Directory {
+  #[instrument(
+    level = Level::DEBUG,
+    name = "acme2_slim::Directory::get_nonce",
+    err,
+    skip(self),
+    fields(cached = field::Empty)
+  )]
   pub(crate) async fn get_nonce(&self) -> Result<String, Error> {
     let maybe_nonce = {
       let mut guard = self.nonce.lock().unwrap();
       std::mem::replace(&mut *guard, None)
     };
+    let span = Span::current();
+    span.record("cached", &maybe_nonce.is_some());
     if let Some(nonce) = maybe_nonce {
       return Ok(nonce);
     }
-
     let resp = self.http_client.get(&self.new_nonce_url).send().await?;
     let maybe_nonce = extract_nonce_from_response(&resp)?;
     match maybe_nonce {
@@ -109,6 +130,7 @@ impl Directory {
     }
   }
 
+  #[instrument(level = Level::DEBUG, name = "acme2_slim::Directory::authenticated_request_raw", err, skip(self, payload, pkey))]
   pub(crate) async fn authenticated_request_raw(
     &self,
     url: &str,
@@ -134,6 +156,13 @@ impl Directory {
     Ok(resp)
   }
 
+  #[instrument(
+    level = Level::DEBUG,
+    name = "acme2_slim::Directory::authenticated_request",
+    err,
+    skip(self, payload, pkey),
+    fields()
+  )]
   pub(crate) async fn authenticated_request<T, R>(
     &self,
     url: &str,
@@ -168,6 +197,7 @@ impl Directory {
         AcmeResult::Err(err) => {
           if let Some(typ) = err.typ.clone() {
             if &typ == "urn:ietf:params:acme:error:badNonce" && attempt <= 3 {
+              debug!({ attempt }, "bad nonce, retrying");
               continue;
             }
           }

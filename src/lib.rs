@@ -142,7 +142,7 @@ mod tests {
 
       let challenge = challenge.validate().await.unwrap();
       let challenge =
-        challenge.poll_done(Duration::from_secs(5)).await.unwrap();
+        challenge.wait_done(Duration::from_secs(5)).await.unwrap();
 
       assert_eq!(challenge.status, ChallengeStatus::Valid);
 
@@ -153,20 +153,20 @@ mod tests {
         .await
         .unwrap();
 
-      let authorization = auth.poll_done(Duration::from_secs(5)).await.unwrap();
+      let authorization = auth.wait_done(Duration::from_secs(5)).await.unwrap();
       assert_eq!(authorization.status, AuthorizationStatus::Valid)
     }
 
     assert_eq!(order.status, OrderStatus::Pending);
 
-    let order = order.poll_ready(Duration::from_secs(5)).await.unwrap();
+    let order = order.wait_ready(Duration::from_secs(5)).await.unwrap();
 
     assert_eq!(order.status, OrderStatus::Ready);
 
     let pkey = gen_rsa_private_key(4096).unwrap();
     let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
 
-    let order = order.poll_done(Duration::from_secs(5)).await.unwrap();
+    let order = order.wait_done(Duration::from_secs(5)).await.unwrap();
 
     assert_eq!(order.status, OrderStatus::Valid);
 
