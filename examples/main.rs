@@ -9,8 +9,7 @@ use acme2::CSR;
 use anyhow::Error;
 use std::time::Duration;
 
-const LETS_ENCRYPT_URL: &str =
-  "https://acme-v02.api.letsencrypt.org/directory";
+const LETS_ENCRYPT_URL: &str = "https://acme-v02.api.letsencrypt.org/directory";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
