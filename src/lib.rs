@@ -16,7 +16,7 @@
 //! This example demonstrates how to provision a certificate for the domain
 //! `example.com` using `http-01` validation.
 //!
-//! ```rust
+//! ```no_run
 //! use acme2::gen_rsa_private_key;
 //! use acme2::AccountBuilder;
 //! use acme2::AuthorizationStatus;
