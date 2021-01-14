@@ -19,10 +19,11 @@ use tracing::instrument;
 use tracing::Level;
 use tracing::Span;
 
+/// The status of this order. 
+/// 
+/// Possible values are "pending", "ready", processing", "valid", and "invalid".
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-/// The status of this order.  Possible values are "pending", "ready",
-/// processing", "valid", and "invalid".
 pub enum OrderStatus {
   Pending,
   Ready,
@@ -31,10 +32,13 @@ pub enum OrderStatus {
   Invalid,
 }
 
+/// An order represents a subscribers's request for a certificate from the
+/// ACME server, and is used to track the progress of that order through to
+/// issuance.
+///
+/// This must be created through an [`OrderBuilder`].
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-/// An ACME order object represents a client's request for a certificate
-/// and is used to track the progress of that order through to issuance.
 pub struct Order {
   #[serde(skip)]
   pub(crate) account: Option<Arc<Account>>,
@@ -72,6 +76,7 @@ pub struct Order {
   pub(crate) certificate_url: Option<String>,
 }
 
+/// A builder used to create a new [`Order`].
 #[derive(Debug)]
 pub struct OrderBuilder {
   account: Arc<Account>,
@@ -88,20 +93,26 @@ impl OrderBuilder {
     }
   }
 
+  /// Set the identifiers for an order.
+  ///
+  /// In most cases, you can use [`OrderBuilder::add_dns_identifier`]
   pub fn set_identifiers(&mut self, identifiers: Vec<Identifier>) -> &mut Self {
     self.identifiers = identifiers;
     self
   }
 
+  /// Add a type `dns` identifier to the list of identifiers for this
+  /// order. 
   pub fn add_dns_identifier(&mut self, fqdn: String) -> &mut Self {
     self.identifiers.push(Identifier {
-      typ: "dns".to_string(),
+      r#type: "dns".to_string(),
       value: fqdn,
     });
     self
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::OrderBuilder::build", err, skip(self), fields(identifiers = ?self.identifiers, order_url = field::Empty))]
+  /// This will request a new [`Order`] from the ACME server.
+  #[instrument(level = Level::INFO, name = "acme2::OrderBuilder::build", err, skip(self), fields(identifiers = ?self.identifiers, order_url = field::Empty))]
   pub async fn build(&mut self) -> Result<Order, Error> {
     let dir = self.account.directory.clone().unwrap();
 
@@ -137,8 +148,14 @@ impl OrderBuilder {
   }
 }
 
+/// A certificate signing request.
 pub enum CSR {
+  /// Automatic signing takes just a private key. The other details of
+  /// the CSR (identifiers, common name, etc), will be automatically
+  /// retrieved from the order this is used with.
   Automatic(PKey<Private>),
+  /// A custom CSR will not be modified, and will be passed to the ACME
+  /// server as is.
   Custom(X509Req),
 }
 
@@ -179,7 +196,17 @@ fn gen_csr(
 }
 
 impl Order {
-  #[instrument(level = Level::INFO, name = "acme2_slim::Order::finalize", err, skip(self, csr), fields(order_url = %self.url, status = field::Empty))]
+  /// Finalize an order (request the final certificate).
+  ///
+  /// For finalization to complete, the state of the order must be in the
+  /// [`OrderStatus::Ready`] state. You can use [`Order::wait_ready`] to wait
+  /// until this is the case. 
+  ///
+  /// In most cases this will not complete immediately. You should always
+  /// call [`Order::wait_done`] after this operation to wait until the
+  /// ACME server has finished finalization, and the certificate is ready
+  /// for download.
+  #[instrument(level = Level::INFO, name = "acme2::Order::finalize", err, skip(self, csr), fields(order_url = %self.url, status = field::Empty))]
   pub async fn finalize(&self, csr: CSR) -> Result<Order, Error> {
     let csr = match csr {
       CSR::Automatic(pkey) => gen_csr(
@@ -214,7 +241,9 @@ impl Order {
     Ok(order)
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::Order::certificate", err, skip(self), fields(order_url = %self.url, has_certificate = field::Empty))]
+  /// Download the certificate. The order must be in the [`OrderStatus::Valid`]
+  /// state for this to complete.
+  #[instrument(level = Level::INFO, name = "acme2::Order::certificate", err, skip(self), fields(order_url = %self.url, has_certificate = field::Empty))]
   pub async fn certificate(&self) -> Result<Option<Vec<X509>>, Error> {
     Span::current().record("has_certificate", &self.certificate_url.is_some());
     let certificate_url = match self.certificate_url.clone() {
@@ -239,7 +268,10 @@ impl Order {
     Ok(Some(X509::stack_from_pem(&bytes)?))
   }
 
-  #[instrument(level = Level::DEBUG, name = "acme2_slim::Order::poll", err, skip(self), fields(order_url = %self.url, status = field::Empty))]
+  /// Update the order to match the current server state.
+  ///
+  /// Most users should use [`Order::wait_ready`] or [`Order::wait_done`].
+  #[instrument(level = Level::DEBUG, name = "acme2::Order::poll", err, skip(self), fields(order_url = %self.url, status = field::Empty))]
   pub async fn poll(&self) -> Result<Order, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
@@ -260,7 +292,14 @@ impl Order {
     Ok(order)
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
+  /// Wait for this order to go into a state other than [`OrderStatus::Pending`].
+  /// 
+  /// This happens when all [`crate::Authorization`]s in this order have been completed
+  /// (have the [`crate::AuthorizationStatus::Valid`] state).
+  ///
+  /// Will complete immediately if the order is already
+  /// in one of these states.
+  #[instrument(level = Level::INFO, name = "acme2::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
   pub async fn wait_ready(
     self,
     poll_interval: Duration,
@@ -272,14 +311,22 @@ impl Order {
         { delay = ?poll_interval },
         "Order still pending. Waiting to poll."
       );
-      tokio::time::delay_for(poll_interval).await;
+      tokio::time::sleep(poll_interval).await;
       order = order.poll().await?;
     }
 
     Ok(order)
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
+  /// Wait for the order to go into the [`OrderStatus::Valid`]
+  /// or [`OrderStatus::Invalid`] state.
+  ///
+  /// This will happen after the order has gone into the [`OrderStatus::Ready`]
+  /// state, and the order has been requested to be finalized.
+  ///
+  /// Will complete immediately if the order is already
+  /// in one of these states.
+  #[instrument(level = Level::INFO, name = "acme2::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
   pub async fn wait_done(
     self,
     poll_interval: Duration,
@@ -294,7 +341,7 @@ impl Order {
         { delay = ?poll_interval, status = ?order.status },
         "Order not done. Waiting to poll."
       );
-      tokio::time::delay_for(poll_interval).await;
+      tokio::time::sleep(poll_interval).await;
       order = order.poll().await?;
     }
 

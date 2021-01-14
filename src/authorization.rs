@@ -18,8 +18,10 @@ use tracing::Span;
 
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-/// The status of this authorization. Possible values are "pending",
-/// "valid", "invalid", "deactivated", "expired", and "revoked".
+/// The status of this authorization.
+///
+/// Possible values are "pending", "valid", "invalid", "deactivated",
+/// "expired", and "revoked".
 pub enum AuthorizationStatus {
   Pending,
   Valid,
@@ -29,17 +31,17 @@ pub enum AuthorizationStatus {
   Revoked,
 }
 
+/// An autorization represents the server's authorization of a certain
+/// domain being represented by an account.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-/// An ACME authorization object represents a server's authorization
-/// for an account to represent an identifier.
 pub struct Authorization {
   #[serde(skip)]
   pub(crate) account: Option<Arc<Account>>,
   #[serde(skip)]
   pub(crate) url: String,
 
-  /// The identifier that the account is authorized to represent.
+  /// The identifier (domain) that the account is authorized to represent.
   pub identifier: Identifier,
   /// The status of this authorization.
   pub status: AuthorizationStatus,
@@ -52,13 +54,16 @@ pub struct Authorization {
   /// invalid authorizations, the challenge that was attempted and
   /// failed.
   pub challenges: Vec<Challenge>,
+  /// Whether this authorization was created for a wildcard identifier
+  /// (domain).
   pub wildcard: Option<bool>,
 }
 
+/// The status of this challenge.
+///
+/// Possible values are "pending", "processing", "valid", and "invalid".
 #[derive(Deserialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
-/// The status of this challenge. Possible values are "pending",
-/// "processing", "valid", and "invalid".
 pub enum ChallengeStatus {
   Pending,
   Processing,
@@ -66,15 +71,18 @@ pub enum ChallengeStatus {
   Invalid,
 }
 
+/// A challenge represents a means for the server to validate
+/// that an account has control over an identifier (domain).
+///
+/// A challenge can only be acquired through an [`Authorization`].
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Challenge {
   #[serde(skip)]
   pub(crate) account: Option<Arc<Account>>,
 
-  #[serde(rename = "type")]
   /// The type of challenge encoded in the object.
-  pub typ: String,
+  pub r#type: String,
   /// The URL to which a response can be posted.
   pub(crate) url: String,
   /// The status of this challenge.
@@ -91,7 +99,12 @@ pub struct Challenge {
 }
 
 impl Order {
-  #[instrument(level = Level::INFO, name = "acme2_slim::Order::authorizations", err, skip(self), fields(order = %self.url, authorization_urls = ?self.authorization_urls))]
+  /// Retrieve all of the [`Authorization`]s needed for this order.
+  /// 
+  /// The authorization may already be in a `Valid` state, if an
+  /// authorization for this identifier was already completed through
+  /// a seperate order.
+  #[instrument(level = Level::INFO, name = "acme2::Order::authorizations", err, skip(self), fields(order = %self.url, authorization_urls = ?self.authorization_urls))]
   pub async fn authorizations(&self) -> Result<Vec<Authorization>, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
@@ -124,17 +137,23 @@ impl Order {
 }
 
 impl Authorization {
-  pub fn get_challenge(&self, typ: &str) -> Option<Challenge> {
+  /// Get a certain type of challenge to complete.
+  ///
+  /// Example: `http-01`, or `dns-01`
+  pub fn get_challenge(&self, r#type: &str) -> Option<Challenge> {
     for challenge in &self.challenges {
-      if challenge.typ == typ {
+      if challenge.r#type == r#type {
         return Some(challenge.clone());
       }
     }
     None
   }
 
-  #[instrument(level = Level::DEBUG, name = "acme2_slim::Authorization::poll", err, skip(self), fields(url = ?self.url, status = field::Empty))]
-  pub async fn poll(&self) -> Result<Authorization, Error> {
+  /// Update the authorization to match the current server state.
+  ///
+  /// Most users should use [`Authorization::wait_done`].
+  #[instrument(level = Level::DEBUG, name = "acme2::Authorization::poll", err, skip(self), fields(url = ?self.url, status = field::Empty))]
+  pub async fn poll(self) -> Result<Authorization, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
 
@@ -154,7 +173,16 @@ impl Authorization {
     Ok(authorization)
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::Authorization::wait_done", err, skip(self), fields(url = ?self.url))]
+  /// Wait for the authorization to go into a state other than
+  /// [`AuthorizationStatus::Pending`].
+  ///
+  /// This will only happen once one of the challenges in an authorization
+  /// is completed. You can use [`Challenge::wait_done`] to wait until
+  /// this is the case. 
+  ///
+  /// Will complete immediately if the authorization is already in a
+  /// state other than [`AuthorizationStatus::Pending`].
+  #[instrument(level = Level::INFO, name = "acme2::Authorization::wait_done", err, skip(self), fields(url = ?self.url))]
   pub async fn wait_done(
     self,
     poll_interval: Duration,
@@ -166,7 +194,7 @@ impl Authorization {
         { delay = ?poll_interval },
         "Authorization still pending. Waiting to poll."
       );
-      tokio::time::delay_for(poll_interval).await;
+      tokio::time::sleep(poll_interval).await;
       authorization = authorization.poll().await?;
     }
 
@@ -175,6 +203,8 @@ impl Authorization {
 }
 
 impl Challenge {
+  /// The key authorization is the token that the HTTP01, or DNS01
+  // challenges should be serving for the ACME server to inspect.
   pub fn key_authorization(&self) -> Result<Option<String>, Error> {
     if let Some(token) = self.token.clone() {
       let account = self.account.clone().unwrap();
@@ -197,7 +227,15 @@ impl Challenge {
     }
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::Challenge::validate", err, skip(self), fields(url = ?self.url, status = field::Empty))]
+  /// Initiate validation of the challenge by the ACME server.
+  ///
+  /// Before calling this method, you should have set up your challenge token
+  /// so it is available for the ACME server to check.
+  ///
+  /// In most cases this will not complete immediately. You should always
+  /// call [`Challenge::wait_done`] after this operation to wait until the
+  /// ACME server has finished validation.
+  #[instrument(level = Level::INFO, name = "acme2::Challenge::validate", err, skip(self), fields(url = ?self.url, status = field::Empty))]
   pub async fn validate(&self) -> Result<Challenge, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
@@ -218,7 +256,10 @@ impl Challenge {
     Ok(challenge)
   }
 
-  #[instrument(level = Level::DEBUG, name = "acme2_slim::Challenge::poll", err, skip(self), fields(url = ?self.url, status = field::Empty))]
+  /// Update the challenge to match the current server state.
+  ///
+  /// Most users should use [`Challenge::wait_done`].
+  #[instrument(level = Level::DEBUG, name = "acme2::Challenge::poll", err, skip(self), fields(url = ?self.url, status = field::Empty))]
   pub async fn poll(&self) -> Result<Challenge, Error> {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
@@ -238,7 +279,12 @@ impl Challenge {
     Ok(challenge)
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::Challenge::wait_done", err, skip(self), fields(url = ?self.url))]
+  /// Wait for the authorization to go into the [`AuthorizationStatus::Valid`]
+  /// or [`AuthorizationStatus::Invalid`] state.
+  ///
+  /// Will complete immediately if the authorization is already
+  /// in one of these states.
+  #[instrument(level = Level::INFO, name = "acme2::Challenge::wait_done", err, skip(self), fields(url = ?self.url))]
   pub async fn wait_done(
     self,
     poll_interval: Duration,
@@ -252,7 +298,7 @@ impl Challenge {
         { delay = ?poll_interval, status = ?challenge.status },
         "Challenge not done. Waiting to poll."
       );
-      tokio::time::delay_for(poll_interval).await;
+      tokio::time::sleep(poll_interval).await;
       challenge = challenge.poll().await?;
     }
 

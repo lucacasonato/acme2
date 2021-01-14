@@ -1,12 +1,12 @@
 [package]
-name = "acme2-slim"
-description = "AcmeV2 Support, based on acme-client crate by Onur Aslan"
-version = "0.1.2"
-authors = ["Onur Aslan <onur@onur.im>","Adam Shaw <discourse@gmail.com>"]
+name = "acme2"
+description = "A Tokio and OpenSSL based ACMEv2 client."
+version = "0.2.0"
+authors = ["Luca Casonato <hello@lcas.dev>"]
 license = "MIT"
 keywords = ["letsencrypt", "acme"]
 readme = "README.md"
-repository = "https://github.com/cyclopunk/acme2-slim"
+repository = "https://github.com/lucacasonato/acme2-slim"
 edition = "2018"
 
 [dependencies]
@@ -14,12 +14,12 @@ anyhow = "1.0"
 serde = {version = "1.0", features=["derive"]}
 serde_json = "1.0"
 base64 = "0.13"
-hyper = "0.13"
-reqwest = { version = "0.10", default-features = false, features = ["rustls-tls", "json"] }
+hyper = "0.14"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
 openssl = "0.10"
-tokio = { version = "0.2", features = [ "time", "fs" ] }
+tokio = { version = "1.0", features = [ "time", "fs" ] }
 tracing = "0.1"
 tracing-futures = "0.2"
 
 [dev-dependencies]
-tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }

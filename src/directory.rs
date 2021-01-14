@@ -14,12 +14,18 @@ use tracing::instrument;
 use tracing::Level;
 use tracing::Span;
 
+/// An builder that is used create a [`Directory`].
 pub struct DirectoryBuilder {
   url: String,
   http_client: Option<reqwest::Client>,
 }
 
 impl DirectoryBuilder {
+  /// Creates a new builder with the specified directory root URL.
+  ///
+  /// Let's Encrypt: `https://acme-v02.api.letsencrypt.org/directory`
+  ///
+  /// Let's Encrypt Staging: `https://acme-staging-v02.api.letsencrypt.org/directory`
   pub fn new(url: String) -> Self {
     DirectoryBuilder {
       url,
@@ -27,14 +33,20 @@ impl DirectoryBuilder {
     }
   }
 
+  /// Specify a custom [`reqwest::Client`] to use for all outbound HTTP
+  /// requests to the ACME server.
   pub fn http_client(&mut self, http_client: reqwest::Client) -> &mut Self {
     self.http_client = Some(http_client);
     self
   }
 
+  /// Build a [`Directory`] using the given parameters.
+  ///
+  /// If no http client is specified, a default client will be created using
+  /// the webpki trust roots.
   #[instrument(
     level = Level::INFO,
-    name = "acme2_slim::DirectoryBuilder::build",
+    name = "acme2::DirectoryBuilder::build",
     err,
     skip(self),
     fields(url = %self.url, custom_http_client = self.http_client.is_some(), dir = field::Empty)
@@ -59,6 +71,9 @@ impl DirectoryBuilder {
   }
 }
 
+/// A directory is the resource representing how to reach an ACME server.
+///
+/// Must be created through a [`DirectoryBuilder`].
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Directory {
@@ -78,9 +93,13 @@ pub struct Directory {
   pub(crate) key_change_url: String,
   #[serde(rename = "newAuthz")]
   pub(crate) new_authz_url: Option<String>,
+  /// Optional metadata describing a directory.
   pub meta: Option<DirectoryMeta>,
 }
 
+/// This is some metadata about a directory.
+///
+/// Directories are not required to provide this information.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryMeta {
@@ -107,7 +126,7 @@ fn extract_nonce_from_response(
 impl Directory {
   #[instrument(
     level = Level::DEBUG,
-    name = "acme2_slim::Directory::get_nonce",
+    name = "acme2::Directory::get_nonce",
     err,
     skip(self),
     fields(cached = field::Empty)
@@ -130,7 +149,7 @@ impl Directory {
     }
   }
 
-  #[instrument(level = Level::DEBUG, name = "acme2_slim::Directory::authenticated_request_raw", err, skip(self, payload, pkey))]
+  #[instrument(level = Level::DEBUG, name = "acme2::Directory::authenticated_request_raw", err, skip(self, payload, pkey))]
   pub(crate) async fn authenticated_request_raw(
     &self,
     url: &str,
@@ -158,7 +177,7 @@ impl Directory {
 
   #[instrument(
     level = Level::DEBUG,
-    name = "acme2_slim::Directory::authenticated_request",
+    name = "acme2::Directory::authenticated_request",
     err,
     skip(self, payload, pkey),
     fields()

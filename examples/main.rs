@@ -1,22 +1,3 @@
-# acme2
-
-A [Tokio](https://crates.io/crates/tokio) and
-[OpenSSL](https://crates.io/crates/openssl) based
-[ACMEv2](https://tools.ietf.org/html/rfc8555) client.
-
-Features:
-
-- ACME v2 support, tested against Let's Encrypt and Pebble
-- Fully async, using `reqwest` / Tokio
-- Support for DNS01 and HTTP01 validation
-- Fully instrumented with `tracing`
-
-## Example
-
-This example demonstrates how to provision a certificate for the domain
-`example.com` using `http-01` validation.
-
-```rust
 use acme2::gen_rsa_private_key;
 use acme2::AccountBuilder;
 use acme2::AuthorizationStatus;
@@ -106,39 +87,3 @@ async fn main() -> Result<(), Error> {
 
   Ok(())
 }
-```
-
-## Development
-
-To run the tests, you will need to install `pebble` and `pebble-challtestsrv`.
-
-Start these before running the tests with these commands (in seperate shells):
-
-```shell
-pebble -config ./pebble-config.json -strict
-```
-
-```shell
-pebble-challtestsrv
-```
-
-### Windows
-
-To compile on Windows you will need OpenSSL. Here is an easy way to get it
-installed.
-
-(example in Git Bash)
-
-```bash
-git clone https://github.com/microsoft/vcpkg
-cd vcpkg
-./bootstrap-vcpkg.sh
-./vcpkg.exe install openssl
-./vcpkg.exe install openssl:x64-windows-static
-# Add OPENSSL_DIR=/vcpkg/path/installed/x64-windows-static
-cargo build
-```
-
-## Licence
-
-This project is licenced under MIT. See LICENCE file for more.

@@ -11,22 +11,25 @@ use tracing::instrument;
 use tracing::Level;
 use tracing::Span;
 
-#[derive(Deserialize, Eq, PartialEq, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-/// The status of this account.  Possible values are "valid", "deactivated",
+/// The status of an [`Account`].
+///
+/// Possible values are "valid", "deactivated",
 /// and "revoked". The value "deactivated" should be used to indicate client-
 /// initiated deactivation whereas "revoked" should be used to indicate server-
 /// initiated deactivation.
+#[derive(Deserialize, Eq, PartialEq, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub enum AccountStatus {
   Valid,
   Deactivated,
   Revoked,
 }
 
+/// An ACME account. This is used to identify a subscriber to an ACME server.
+///
+/// This resource should be created through an [`AccountBuilder`].
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-/// An ACME account resource represents a set of metadata associated with an
-/// account.
 pub struct Account {
   #[serde(skip)]
   pub(crate) directory: Option<Arc<Directory>>,
@@ -53,6 +56,8 @@ pub struct Account {
   // pub(crate) orders_url: Option<String>,
 }
 
+/// An builder that is used to create / retrieve an [`Account`] from the
+/// ACME server.
 #[derive(Debug)]
 pub struct AccountBuilder {
   directory: Arc<Directory>,
@@ -66,6 +71,9 @@ pub struct AccountBuilder {
 }
 
 impl AccountBuilder {
+  /// This creates a new [`AccountBuilder`]. This can be used to create a new
+  /// account (if the server has not seen the private key before), or to retrieve
+  /// an existing account (using a previously used private key).
   pub fn new(directory: Arc<Directory>) -> Self {
     AccountBuilder {
       directory,
@@ -76,16 +84,22 @@ impl AccountBuilder {
     }
   }
 
+  /// The private key that is used to sign requests to the ACME server. This
+  /// may not be the same as a certificate private key. 
   pub fn private_key(&mut self, private_key: PKey<Private>) -> &mut Self {
     self.private_key = Some(private_key);
     self
   }
 
+  /// The contact information for the account. For example this could be a
+  /// `vec!["email:hello@lcas.dev".to_string()]`. The supported contact types
+  /// vary from one ACME server to another.
   pub fn contact(&mut self, contact: Vec<String>) -> &mut Self {
     self.contact = Some(contact);
     self
   }
 
+  /// If you agree to the ACME server terms of service.
   pub fn terms_of_service_agreed(
     &mut self,
     terms_of_service_agreed: bool,
@@ -94,6 +108,8 @@ impl AccountBuilder {
     self
   }
 
+  /// Do not try to create a new account. If this is set, only an existing account
+  /// will be returned.
   pub fn only_return_existing(
     &mut self,
     only_return_existing: bool,
@@ -102,7 +118,13 @@ impl AccountBuilder {
     self
   }
 
-  #[instrument(level = Level::INFO, name = "acme2_slim::AccountBuilder::build", err, skip(self), fields(contact = ?self.contact, terms_of_service_agreed = ?self.terms_of_service_agreed, only_return_existing = ?self.only_return_existing, private_key_id = field::Empty))]
+  /// This will create / retrieve an [`Account`] from the ACME server.
+  /// 
+  /// If the [`AccountBuilder`] does not contain a private key, a new
+  /// 4096 bit RSA key will be generated (using the system random). If
+  /// a key is generated, it can be retrieved from the created [`Account`]
+  /// through the [`Account::private_key`] method.
+  #[instrument(level = Level::INFO, name = "acme2::AccountBuilder::build", err, skip(self), fields(contact = ?self.contact, terms_of_service_agreed = ?self.terms_of_service_agreed, only_return_existing = ?self.only_return_existing, private_key_id = field::Empty))]
   pub async fn build(&mut self) -> Result<Arc<Account>, Error> {
     let private_key = if let Some(private_key) = self.private_key.clone() {
       private_key
@@ -145,6 +167,7 @@ impl AccountBuilder {
 }
 
 impl Account {
+  /// Retrieve the private key for this account.
   pub fn private_key(&self) -> PKey<Private> {
     self.private_key.clone().unwrap()
   }
