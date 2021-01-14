@@ -214,7 +214,7 @@ impl Directory {
 
       let res = match res {
         AcmeResult::Err(err) => {
-          if let Some(typ) = err.typ.clone() {
+          if let Some(typ) = err.r#type.clone() {
             if &typ == "urn:ietf:params:acme:error:badNonce" && attempt <= 3 {
               debug!({ attempt }, "bad nonce, retrying");
               continue;

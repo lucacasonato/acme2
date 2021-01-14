@@ -44,10 +44,12 @@ pub(crate) fn jws(
 ) -> Result<String, anyhow::Error> {
   let payload_b64 = b64(&payload.as_bytes());
 
-  let mut header = JwsHeader::default();
-  header.nonce = nonce;
-  header.alg = "RS256".into();
-  header.url = url.to_string();
+  let mut header = JwsHeader {
+    nonce,
+    alg: "RS256".into(),
+    url: url.to_string(),
+    ..Default::default()
+  };
 
   if let Some(kid) = pkey_id {
     header.kid = kid.into();

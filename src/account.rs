@@ -85,7 +85,7 @@ impl AccountBuilder {
   }
 
   /// The private key that is used to sign requests to the ACME server. This
-  /// may not be the same as a certificate private key. 
+  /// may not be the same as a certificate private key.
   pub fn private_key(&mut self, private_key: PKey<Private>) -> &mut Self {
     self.private_key = Some(private_key);
     self
@@ -119,7 +119,7 @@ impl AccountBuilder {
   }
 
   /// This will create / retrieve an [`Account`] from the ACME server.
-  /// 
+  ///
   /// If the [`AccountBuilder`] does not contain a private key, a new
   /// 4096 bit RSA key will be generated (using the system random). If
   /// a key is generated, it can be retrieved from the created [`Account`]

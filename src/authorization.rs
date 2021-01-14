@@ -100,7 +100,7 @@ pub struct Challenge {
 
 impl Order {
   /// Retrieve all of the [`Authorization`]s needed for this order.
-  /// 
+  ///
   /// The authorization may already be in a `Valid` state, if an
   /// authorization for this identifier was already completed through
   /// a seperate order.
@@ -178,7 +178,7 @@ impl Authorization {
   ///
   /// This will only happen once one of the challenges in an authorization
   /// is completed. You can use [`Challenge::wait_done`] to wait until
-  /// this is the case. 
+  /// this is the case.
   ///
   /// Will complete immediately if the authorization is already in a
   /// state other than [`AuthorizationStatus::Pending`].

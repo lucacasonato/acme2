@@ -16,7 +16,6 @@ pub struct Identifier {
   pub value: String,
 }
 
-
 /// This is an error as returned by the ACME server.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]

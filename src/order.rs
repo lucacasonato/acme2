@@ -19,8 +19,8 @@ use tracing::instrument;
 use tracing::Level;
 use tracing::Span;
 
-/// The status of this order. 
-/// 
+/// The status of this order.
+///
 /// Possible values are "pending", "ready", processing", "valid", and "invalid".
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -102,7 +102,7 @@ impl OrderBuilder {
   }
 
   /// Add a type `dns` identifier to the list of identifiers for this
-  /// order. 
+  /// order.
   pub fn add_dns_identifier(&mut self, fqdn: String) -> &mut Self {
     self.identifiers.push(Identifier {
       r#type: "dns".to_string(),
@@ -200,7 +200,7 @@ impl Order {
   ///
   /// For finalization to complete, the state of the order must be in the
   /// [`OrderStatus::Ready`] state. You can use [`Order::wait_ready`] to wait
-  /// until this is the case. 
+  /// until this is the case.
   ///
   /// In most cases this will not complete immediately. You should always
   /// call [`Order::wait_done`] after this operation to wait until the
@@ -293,7 +293,7 @@ impl Order {
   }
 
   /// Wait for this order to go into a state other than [`OrderStatus::Pending`].
-  /// 
+  ///
   /// This happens when all [`crate::Authorization`]s in this order have been completed
   /// (have the [`crate::AuthorizationStatus::Valid`] state).
   ///
