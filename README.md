@@ -22,10 +22,10 @@ use acme2::AccountBuilder;
 use acme2::AuthorizationStatus;
 use acme2::ChallengeStatus;
 use acme2::DirectoryBuilder;
+use acme2::Error;
 use acme2::OrderBuilder;
 use acme2::OrderStatus;
 use acme2::CSR;
-use anyhow::Error;
 use std::time::Duration;
 
 const LETS_ENCRYPT_URL: &'static str =
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Error> {
 
     // Poll the challenge every 5 seconds until it is in either the
     // `valid` or `invalid` state.
-    let challenge = challenge.wait_done(Duration::from_secs(5)).await?;
+    let challenge = challenge.wait_done(Duration::from_secs(5), 3).await?;
 
     assert_eq!(challenge.status, ChallengeStatus::Valid);
 
@@ -75,14 +75,14 @@ async fn main() -> Result<(), Error> {
 
     // Poll the authorization every 5 seconds until it is in either the
     // `valid` or `invalid` state.
-    let authorization = auth.wait_done(Duration::from_secs(5)).await?;
+    let authorization = auth.wait_done(Duration::from_secs(5), 3).await?;
     assert_eq!(authorization.status, AuthorizationStatus::Valid)
   }
 
   // Poll the order every 5 seconds until it is in either the
   // `ready` or `invalid` state. Ready means that it is now ready
   // for finalization (certificate creation).
-  let order = order.wait_ready(Duration::from_secs(5)).await?;
+  let order = order.wait_ready(Duration::from_secs(5), 3).await?;
 
   assert_eq!(order.status, OrderStatus::Ready);
 
@@ -96,7 +96,7 @@ async fn main() -> Result<(), Error> {
   // Poll the order every 5 seconds until it is in either the
   // `valid` or `invalid` state. Valid means that the certificate
   // has been provisioned, and is now ready for download.
-  let order = order.wait_done(Duration::from_secs(5)).await?;
+  let order = order.wait_done(Duration::from_secs(5), 3).await?;
 
   assert_eq!(order.status, OrderStatus::Valid);
 

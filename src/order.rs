@@ -301,20 +301,31 @@ impl Order {
   ///
   /// Will complete immediately if the order is already
   /// in one of these states.
+  ///
+  /// Specify the interval at which to poll the acme server, and how often to
+  /// attempt polling before timing out. Polling should not happen faster than
+  /// about every 5 seconds to avoid rate limits in the acme server.
   #[instrument(level = Level::INFO, name = "acme2::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
   pub async fn wait_ready(
     self,
     poll_interval: Duration,
+    attempts: usize,
   ) -> Result<Order, Error> {
     let mut order = self;
 
+    let mut i: usize = 0;
+
     while order.status == OrderStatus::Pending {
+      if i >= attempts {
+        return Err(Error::MaxAttemptsExceeded);
+      }
       debug!(
         { delay = ?poll_interval },
         "Order still pending. Waiting to poll."
       );
       tokio::time::sleep(poll_interval).await;
       order = order.poll().await?;
+      i += 1;
     }
 
     Ok(order)
@@ -328,23 +339,34 @@ impl Order {
   ///
   /// Will complete immediately if the order is already
   /// in one of these states.
+  ///
+  /// Specify the interval at which to poll the acme server, and how often to
+  /// attempt polling before timing out. Polling should not happen faster than
+  /// about every 5 seconds to avoid rate limits in the acme server.
   #[instrument(level = Level::INFO, name = "acme2::Order::wait_ready", err, skip(self), fields(order_url = %self.url))]
   pub async fn wait_done(
     self,
     poll_interval: Duration,
+    attempts: usize,
   ) -> Result<Order, Error> {
     let mut order = self;
+
+    let mut i: usize = 0;
 
     while order.status == OrderStatus::Pending
       || order.status == OrderStatus::Ready
       || order.status == OrderStatus::Processing
     {
+      if i >= attempts {
+        return Err(Error::MaxAttemptsExceeded);
+      }
       debug!(
         { delay = ?poll_interval, status = ?order.status },
         "Order not done. Waiting to poll."
       );
       tokio::time::sleep(poll_interval).await;
       order = order.poll().await?;
+      i += 1;
     }
 
     Ok(order)

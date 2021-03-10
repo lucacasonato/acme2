@@ -67,7 +67,7 @@
 //!
 //!     // Poll the challenge every 5 seconds until it is in either the
 //!     // `valid` or `invalid` state.
-//!     let challenge = challenge.wait_done(Duration::from_secs(5)).await?;
+//!     let challenge = challenge.wait_done(Duration::from_secs(5), 3).await?;
 //!
 //!     assert_eq!(challenge.status, ChallengeStatus::Valid);
 //!
@@ -75,14 +75,14 @@
 //!
 //!     // Poll the authorization every 5 seconds until it is in either the
 //!     // `valid` or `invalid` state.
-//!     let authorization = auth.wait_done(Duration::from_secs(5)).await?;
+//!     let authorization = auth.wait_done(Duration::from_secs(5), 3).await?;
 //!     assert_eq!(authorization.status, AuthorizationStatus::Valid)
 //!   }
 //!
 //!   // Poll the order every 5 seconds until it is in either the
 //!   // `ready` or `invalid` state. Ready means that it is now ready
 //!   // for finalization (certificate creation).
-//!   let order = order.wait_ready(Duration::from_secs(5)).await?;
+//!   let order = order.wait_ready(Duration::from_secs(5), 3).await?;
 //!
 //!   assert_eq!(order.status, OrderStatus::Ready);
 //!
@@ -96,7 +96,7 @@
 //!   // Poll the order every 5 seconds until it is in either the
 //!   // `valid` or `invalid` state. Valid means that the certificate
 //!   // has been provisioned, and is now ready for download.
-//!   let order = order.wait_done(Duration::from_secs(5)).await?;
+//!   let order = order.wait_done(Duration::from_secs(5), 3).await?;
 //!
 //!   assert_eq!(order.status, OrderStatus::Valid);
 //!
@@ -254,8 +254,10 @@ mod tests {
         .unwrap();
 
       let challenge = challenge.validate().await.unwrap();
-      let challenge =
-        challenge.wait_done(Duration::from_secs(5)).await.unwrap();
+      let challenge = challenge
+        .wait_done(Duration::from_secs(5), 3)
+        .await
+        .unwrap();
 
       println!("{:#?}", challenge.error);
       assert_eq!(challenge.status, ChallengeStatus::Valid);
@@ -267,20 +269,21 @@ mod tests {
         .await
         .unwrap();
 
-      let authorization = auth.wait_done(Duration::from_secs(5)).await.unwrap();
+      let authorization =
+        auth.wait_done(Duration::from_secs(5), 3).await.unwrap();
       assert_eq!(authorization.status, AuthorizationStatus::Valid)
     }
 
     assert_eq!(order.status, OrderStatus::Pending);
 
-    let order = order.wait_ready(Duration::from_secs(5)).await.unwrap();
+    let order = order.wait_ready(Duration::from_secs(5), 3).await.unwrap();
 
     assert_eq!(order.status, OrderStatus::Ready);
 
     let pkey = gen_rsa_private_key(4096).unwrap();
     let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
 
-    let order = order.wait_done(Duration::from_secs(5)).await.unwrap();
+    let order = order.wait_done(Duration::from_secs(5), 3).await.unwrap();
 
     assert_eq!(order.status, OrderStatus::Valid);
 

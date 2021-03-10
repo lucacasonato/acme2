@@ -182,20 +182,31 @@ impl Authorization {
   ///
   /// Will complete immediately if the authorization is already in a
   /// state other than [`AuthorizationStatus::Pending`].
+  ///
+  /// Specify the interval at which to poll the acme server, and how often to
+  /// attempt polling before timing out. Polling should not happen faster than
+  /// about every 5 seconds to avoid rate limits in the acme server.
   #[instrument(level = Level::INFO, name = "acme2::Authorization::wait_done", err, skip(self), fields(url = ?self.url))]
   pub async fn wait_done(
     self,
     poll_interval: Duration,
+    attempts: usize,
   ) -> Result<Authorization, Error> {
     let mut authorization = self;
 
+    let mut i: usize = 0;
+
     while authorization.status == AuthorizationStatus::Pending {
+      if i >= attempts {
+        return Err(Error::MaxAttemptsExceeded);
+      }
       debug!(
         { delay = ?poll_interval },
         "Authorization still pending. Waiting to poll."
       );
       tokio::time::sleep(poll_interval).await;
       authorization = authorization.poll().await?;
+      i += 1;
     }
 
     Ok(authorization)
@@ -284,22 +295,33 @@ impl Challenge {
   ///
   /// Will complete immediately if the authorization is already
   /// in one of these states.
+  ///
+  /// Specify the interval at which to poll the acme server, and how often to
+  /// attempt polling before timing out. Polling should not happen faster than
+  /// about every 5 seconds to avoid rate limits in the acme server.
   #[instrument(level = Level::INFO, name = "acme2::Challenge::wait_done", err, skip(self), fields(url = ?self.url))]
   pub async fn wait_done(
     self,
     poll_interval: Duration,
+    attempts: usize,
   ) -> Result<Challenge, Error> {
     let mut challenge = self;
+
+    let mut i: usize = 0;
 
     while challenge.status == ChallengeStatus::Pending
       || challenge.status == ChallengeStatus::Processing
     {
+      if i >= attempts {
+        return Err(Error::MaxAttemptsExceeded);
+      }
       debug!(
         { delay = ?poll_interval, status = ?challenge.status },
         "Challenge not done. Waiting to poll."
       );
       tokio::time::sleep(poll_interval).await;
       challenge = challenge.poll().await?;
+      i += 1;
     }
 
     Ok(challenge)

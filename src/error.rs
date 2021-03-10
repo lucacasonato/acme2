@@ -2,6 +2,9 @@ use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+  #[error("the maximum poll attempts have been exceeded")]
+  MaxAttemptsExceeded,
+
   #[error("validation error: {0}")]
   Validation(&'static str),
 
