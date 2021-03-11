@@ -122,6 +122,7 @@ pub use directory::*;
 pub use error::Error;
 pub use error::ServerError;
 pub use error::TransportError;
+pub use helpers::gen_ec_p256_private_key;
 pub use helpers::gen_rsa_private_key;
 pub use helpers::Identifier;
 pub use openssl;
@@ -223,7 +224,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn test_order_http01_challenge_pebble() {
+  async fn test_order_http01_challenge_pebble_rsa() {
     let account = pebble_account().await;
 
     let mut builder = OrderBuilder::new(account);
@@ -281,6 +282,75 @@ mod tests {
     assert_eq!(order.status, OrderStatus::Ready);
 
     let pkey = gen_rsa_private_key(4096).unwrap();
+    let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
+
+    let order = order.wait_done(Duration::from_secs(5), 3).await.unwrap();
+
+    assert_eq!(order.status, OrderStatus::Valid);
+
+    let cert = order.certificate().await.unwrap().unwrap();
+    assert!(cert.len() > 1);
+  }
+
+  #[tokio::test]
+  async fn test_order_http01_challenge_pebble_ec() {
+    let account = pebble_account().await;
+
+    let mut builder = OrderBuilder::new(account);
+    let order = builder
+      .add_dns_identifier(
+        "test-order-http01-challenge-pebble.lcas.dev".to_string(),
+      )
+      .build()
+      .await
+      .unwrap();
+
+    let authorizations = order.authorizations().await.unwrap();
+
+    let client = pebble_http_client().await;
+    for auth in authorizations {
+      let challenge = auth.get_challenge("http-01").unwrap();
+
+      assert_eq!(challenge.status, ChallengeStatus::Pending);
+
+      client
+        .post("http://localhost:8055/add-http01")
+        .json(&json!({
+          "token": challenge.token,
+          "content": challenge.key_authorization().unwrap().unwrap()
+        }))
+        .send()
+        .await
+        .unwrap();
+
+      let challenge = challenge.validate().await.unwrap();
+      let challenge = challenge
+        .wait_done(Duration::from_secs(5), 3)
+        .await
+        .unwrap();
+
+      println!("{:#?}", challenge.error);
+      assert_eq!(challenge.status, ChallengeStatus::Valid);
+
+      client
+        .post("http://localhost:8055/del-http01")
+        .json(&json!({ "token": challenge.token }))
+        .send()
+        .await
+        .unwrap();
+
+      let authorization =
+        auth.wait_done(Duration::from_secs(5), 3).await.unwrap();
+      assert_eq!(authorization.status, AuthorizationStatus::Valid)
+    }
+
+    assert_eq!(order.status, OrderStatus::Pending);
+
+    let order = order.wait_ready(Duration::from_secs(5), 3).await.unwrap();
+
+    assert_eq!(order.status, OrderStatus::Ready);
+
+    let pkey = gen_ec_p256_private_key().unwrap();
     let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
 
     let order = order.wait_done(Duration::from_secs(5), 3).await.unwrap();

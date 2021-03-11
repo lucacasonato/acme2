@@ -1,4 +1,7 @@
 use crate::error::*;
+use openssl::ec::EcGroup;
+use openssl::ec::EcKey;
+use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
 use openssl::rsa::Rsa;
@@ -25,5 +28,13 @@ pub(crate) fn b64(data: &[u8]) -> String {
 pub fn gen_rsa_private_key(bits: u32) -> Result<PKey<Private>, Error> {
   let rsa = Rsa::generate(bits)?;
   let key = PKey::from_rsa(rsa)?;
+  Ok(key)
+}
+
+/// Generate a new P256 EC private key using the system random.
+pub fn gen_ec_p256_private_key() -> Result<PKey<Private>, Error> {
+  let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+  let rsa = EcKey::generate(&group)?;
+  let key = PKey::from_ec_key(rsa)?;
   Ok(key)
 }
