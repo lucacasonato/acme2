@@ -265,6 +265,12 @@ impl Order {
       )
       .await?;
 
+    if res.status() != 200 {
+      return Err(transport_err(
+        "Retrieving certificate failed: status code not 200",
+      ));
+    }
+
     let bytes = res.bytes().await?;
 
     Ok(Some(X509::stack_from_pem(&bytes)?))
