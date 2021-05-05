@@ -256,6 +256,6 @@ impl Directory {
 
     let val: R = serde_json::from_slice(&bytes)?;
 
-    return Ok((ServerResult::Ok(val), headers));
+    Ok((ServerResult::Ok(val), headers))
   }
 }
