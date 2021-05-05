@@ -2,11 +2,11 @@ use acme2::gen_rsa_private_key;
 use acme2::AccountBuilder;
 use acme2::AuthorizationStatus;
 use acme2::ChallengeStatus;
+use acme2::Csr;
 use acme2::DirectoryBuilder;
 use acme2::Error;
 use acme2::OrderBuilder;
 use acme2::OrderStatus;
-use acme2::Csr;
 use std::time::Duration;
 
 const LETS_ENCRYPT_URL: &str = "https://acme-v02.api.letsencrypt.org/directory";
