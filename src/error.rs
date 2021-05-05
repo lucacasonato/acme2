@@ -58,9 +58,9 @@ pub enum ServerResult<T> {
   Err(ServerError),
 }
 
-impl<T> Into<Result<T, Error>> for ServerResult<T> {
-  fn into(self) -> Result<T, Error> {
-    match self {
+impl<T> From<ServerResult<T>> for Result<T, Error> {
+  fn from(res: ServerResult<T>) -> Result<T, Error> {
+    match res {
       ServerResult::Ok(t) => Ok(t),
       ServerResult::Err(err) => Err(err.into()),
     }

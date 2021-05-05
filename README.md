@@ -25,7 +25,7 @@ use acme2::DirectoryBuilder;
 use acme2::Error;
 use acme2::OrderBuilder;
 use acme2::OrderStatus;
-use acme2::CSR;
+use acme2::Csr;
 use std::time::Duration;
 
 const LETS_ENCRYPT_URL: &'static str =
@@ -91,7 +91,7 @@ async fn main() -> Result<(), Error> {
 
   // Create a certificate signing request for the order, and request
   // the certificate.
-  let order = order.finalize(CSR::Automatic(pkey)).await?;
+  let order = order.finalize(Csr::Automatic(pkey)).await?;
 
   // Poll the order every 5 seconds until it is in either the
   // `valid` or `invalid` state. Valid means that the certificate

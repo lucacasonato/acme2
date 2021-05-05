@@ -24,7 +24,7 @@
 //! use acme2::DirectoryBuilder;
 //! use acme2::OrderBuilder;
 //! use acme2::OrderStatus;
-//! use acme2::CSR;
+//! use acme2::Csr;
 //! use acme2::Error;
 //! use std::time::Duration;
 //!
@@ -91,7 +91,7 @@
 //!
 //!   // Create a certificate signing request for the order, and request
 //!   // the certificate.
-//!   let order = order.finalize(CSR::Automatic(pkey)).await?;
+//!   let order = order.finalize(Csr::Automatic(pkey)).await?;
 //!
 //!   // Poll the order every 5 seconds until it is in either the
 //!   // `valid` or `invalid` state. Valid means that the certificate
@@ -282,7 +282,7 @@ mod tests {
     assert_eq!(order.status, OrderStatus::Ready);
 
     let pkey = gen_rsa_private_key(4096).unwrap();
-    let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
+    let order = order.finalize(Csr::Automatic(pkey)).await.unwrap();
 
     let order = order.wait_done(Duration::from_secs(5), 3).await.unwrap();
 
@@ -351,7 +351,7 @@ mod tests {
     assert_eq!(order.status, OrderStatus::Ready);
 
     let pkey = gen_ec_p256_private_key().unwrap();
-    let order = order.finalize(CSR::Automatic(pkey)).await.unwrap();
+    let order = order.finalize(Csr::Automatic(pkey)).await.unwrap();
 
     let order = order.wait_done(Duration::from_secs(5), 3).await.unwrap();
 

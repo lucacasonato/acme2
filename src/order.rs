@@ -151,7 +151,7 @@ impl OrderBuilder {
 }
 
 /// A certificate signing request.
-pub enum CSR {
+pub enum Csr {
   /// Automatic signing takes just a private key. The other details of
   /// the CSR (identifiers, common name, etc), will be automatically
   /// retrieved from the order this is used with.
@@ -209,9 +209,9 @@ impl Order {
   /// ACME server has finished finalization, and the certificate is ready
   /// for download.
   #[instrument(level = Level::INFO, name = "acme2::Order::finalize", err, skip(self, csr), fields(order_url = %self.url, status = field::Empty))]
-  pub async fn finalize(&self, csr: CSR) -> Result<Order, Error> {
+  pub async fn finalize(&self, csr: Csr) -> Result<Order, Error> {
     let csr = match csr {
-      CSR::Automatic(pkey) => gen_csr(
+      Csr::Automatic(pkey) => gen_csr(
         &pkey,
         self
           .identifiers
@@ -219,7 +219,7 @@ impl Order {
           .map(|f| f.value.clone())
           .collect::<Vec<_>>(),
       )?,
-      CSR::Custom(csr) => csr,
+      Csr::Custom(csr) => csr,
     };
 
     let csr_b64 = b64(&csr.to_der()?);
