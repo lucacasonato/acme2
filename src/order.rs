@@ -256,22 +256,15 @@ impl Order {
     let account = self.account.clone().unwrap();
     let directory = account.directory.clone().unwrap();
 
-    let res = directory
-      .authenticated_request_raw(
+    let bytes = directory
+      .authenticated_request_bytes(
         &certificate_url,
         "",
         &account.private_key.clone().unwrap(),
         &Some(account.private_key_id.clone()),
       )
-      .await?;
-
-    if res.status() != 200 {
-      return Err(transport_err(
-        "Retrieving certificate failed: status code not 200",
-      ));
-    }
-
-    let bytes = res.bytes().await?;
+      .await?
+      .0?;
 
     Ok(Some(X509::stack_from_pem(&bytes)?))
   }

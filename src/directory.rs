@@ -1,5 +1,6 @@
 use crate::error::*;
 use crate::jws::jws;
+use hyper::body::Bytes;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
 use serde::de::DeserializeOwned;
@@ -151,7 +152,7 @@ impl Directory {
   }
 
   #[instrument(level = Level::DEBUG, name = "acme2::Directory::authenticated_request_raw", err, skip(self, payload, pkey))]
-  pub(crate) async fn authenticated_request_raw(
+  async fn authenticated_request_raw(
     &self,
     url: &str,
     payload: &str,
@@ -178,6 +179,49 @@ impl Directory {
 
   #[instrument(
     level = Level::DEBUG,
+    name = "acme2::Directory::authenticated_request_bytes",
+    err,
+    skip(self, payload, pkey),
+    fields()
+  )]
+  pub(crate) async fn authenticated_request_bytes(
+    &self,
+    url: &str,
+    payload: &str,
+    pkey: &PKey<Private>,
+    pkey_id: &Option<String>,
+  ) -> Result<(Result<Bytes, ServerError>, reqwest::header::HeaderMap), Error>
+  {
+    let mut attempt = 0;
+
+    loop {
+      attempt += 1;
+
+      let resp = self
+        .authenticated_request_raw(url, &payload, &pkey, &pkey_id)
+        .await?;
+
+      let headers = resp.headers().clone();
+
+      if resp.status().is_success() {
+        return Ok((Ok(resp.bytes().await?), headers));
+      }
+
+      let err: ServerError = resp.json().await?;
+
+      if let Some(typ) = err.r#type.clone() {
+        if &typ == "urn:ietf:params:acme:error:badNonce" && attempt <= 3 {
+          debug!({ attempt }, "bad nonce, retrying");
+          continue;
+        }
+      }
+
+      return Ok((Err(err), headers));
+    }
+  }
+
+  #[instrument(
+    level = Level::DEBUG,
     name = "acme2::Directory::authenticated_request",
     err,
     skip(self, payload, pkey),
@@ -194,7 +238,6 @@ impl Directory {
     T: Serialize,
     R: DeserializeOwned,
   {
-    let mut attempt = 0;
     let payload = serde_json::to_string(&payload)?;
     let payload = if payload == "\"\"" {
       "".to_string()
@@ -202,31 +245,17 @@ impl Directory {
       payload
     };
 
-    loop {
-      attempt += 1;
+    let (res, headers) = self
+      .authenticated_request_bytes(url, &payload, &pkey, &pkey_id)
+      .await?;
 
-      let resp = self
-        .authenticated_request_raw(url, &payload, &pkey, &pkey_id)
-        .await?;
+    let bytes = match res {
+      Ok(bytes) => bytes,
+      Err(err) => return Ok((ServerResult::Err(err), headers)),
+    };
 
-      let headers = resp.headers().clone();
+    let val: R = serde_json::from_slice(&bytes)?;
 
-      let res: ServerResult<R> = resp.json().await?;
-
-      let res = match res {
-        ServerResult::Err(err) => {
-          if let Some(typ) = err.r#type.clone() {
-            if &typ == "urn:ietf:params:acme:error:badNonce" && attempt <= 3 {
-              debug!({ attempt }, "bad nonce, retrying");
-              continue;
-            }
-          }
-          ServerResult::Err(err)
-        }
-        ServerResult::Ok(ok) => ServerResult::Ok(ok),
-      };
-
-      return Ok((res, headers));
-    }
+    return Ok((ServerResult::Ok(val), headers));
   }
 }
