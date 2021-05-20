@@ -165,6 +165,8 @@ mod tests {
       .await
       .unwrap();
 
+    assert!(!account.id.is_empty());
+
     account
   }
 
@@ -211,6 +213,8 @@ mod tests {
       .await
       .unwrap();
 
+    assert!(!account.id.is_empty());
+
     let mut builder = AccountBuilder::new(dir.clone());
     let account2 = builder
       .contact(vec!["mailto:hello@lcas.dev".to_string()])
@@ -219,6 +223,7 @@ mod tests {
       .await
       .unwrap();
 
+    assert!(!account.id.is_empty());
     assert_eq!(account.status, AccountStatus::Valid);
     assert_eq!(account2.status, AccountStatus::Valid);
   }
