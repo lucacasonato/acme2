@@ -41,7 +41,7 @@ pub(crate) fn jws(
   nonce: String,
   payload: &str,
   pkey: &PKey<Private>,
-  pkey_id: Option<String>,
+  account_id: Option<String>,
 ) -> Result<String, Error> {
   let payload_b64 = b64(&payload.as_bytes());
 
@@ -52,7 +52,7 @@ pub(crate) fn jws(
     ..Default::default()
   };
 
-  if let Some(kid) = pkey_id {
+  if let Some(kid) = account_id {
     header.kid = kid.into();
   } else {
     header.jwk = Some(Jwk::new(&pkey));

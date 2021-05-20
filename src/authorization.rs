@@ -117,7 +117,7 @@ impl Order {
           &authorization_url,
           "",
           account.private_key.clone().unwrap(),
-          Some(account.private_key_id.clone()),
+          Some(account.id.clone()),
         )
         .await?;
 
@@ -162,7 +162,7 @@ impl Authorization {
         &self.url,
         json!(""),
         account.private_key.clone().unwrap(),
-        Some(account.private_key_id.clone()),
+        Some(account.id.clone()),
       )
       .await?;
     let res: Result<Authorization, Error> = res.into();
@@ -256,7 +256,7 @@ impl Challenge {
         &self.url,
         json!({}),
         account.private_key.clone().unwrap(),
-        Some(account.private_key_id.clone()),
+        Some(account.id.clone()),
       )
       .await?;
     let res: Result<Challenge, Error> = res.into();
@@ -280,7 +280,7 @@ impl Challenge {
         &self.url,
         json!(""),
         account.private_key.clone().unwrap(),
-        Some(account.private_key_id.clone()),
+        Some(account.id.clone()),
       )
       .await?;
     let res: Result<Challenge, Error> = res.into();

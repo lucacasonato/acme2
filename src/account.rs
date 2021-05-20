@@ -36,8 +36,10 @@ pub struct Account {
 
   #[serde(skip)]
   pub(crate) private_key: Option<PKey<Private>>,
+
   #[serde(skip)]
-  pub(crate) private_key_id: String,
+  /// The account ID of this account.
+  pub id: String,
 
   /// The status of this account.
   pub status: AccountStatus,
@@ -150,7 +152,7 @@ impl AccountBuilder {
     let res: Result<Account, Error> = res.into();
     let mut acc = res?;
 
-    let private_key_id = map_transport_err(
+    let account_id = map_transport_err(
       headers
         .get(reqwest::header::LOCATION)
         .ok_or_else(|| {
@@ -159,11 +161,11 @@ impl AccountBuilder {
         .to_str(),
     )?
     .to_string();
-    Span::current().record("private_key_id", &field::display(&private_key_id));
+    Span::current().record("account_id", &field::display(&account_id));
 
     acc.directory = Some(self.directory.clone());
     acc.private_key = Some(private_key);
-    acc.private_key_id = private_key_id;
+    acc.id = account_id;
     Ok(Arc::new(acc))
   }
 }

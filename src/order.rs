@@ -123,7 +123,7 @@ impl OrderBuilder {
           "identifiers": self.identifiers,
         }),
         self.account.private_key.clone().unwrap(),
-        Some(self.account.private_key_id.clone()),
+        Some(self.account.id.clone()),
       )
       .await?;
 
@@ -232,7 +232,7 @@ impl Order {
         &self.finalize_url,
         json!({ "csr": csr_b64 }),
         account.private_key.clone().unwrap(),
-        Some(account.private_key_id.clone()),
+        Some(account.id.clone()),
       )
       .await?;
     let res: Result<Order, Error> = res.into();
@@ -261,7 +261,7 @@ impl Order {
         &certificate_url,
         "",
         &account.private_key.clone().unwrap(),
-        &Some(account.private_key_id.clone()),
+        &Some(account.id.clone()),
       )
       .await?
       .0?;
@@ -282,7 +282,7 @@ impl Order {
         &self.url,
         json!(""),
         account.private_key.clone().unwrap(),
-        Some(account.private_key_id.clone()),
+        Some(account.id.clone()),
       )
       .await?;
     let res: Result<Order, Error> = res.into();

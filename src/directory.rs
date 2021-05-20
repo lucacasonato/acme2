@@ -157,10 +157,10 @@ impl Directory {
     url: &str,
     payload: &str,
     pkey: &PKey<Private>,
-    pkey_id: &Option<String>,
+    account_id: &Option<String>,
   ) -> Result<reqwest::Response, Error> {
     let nonce = self.get_nonce().await?;
-    let body = jws(url, nonce, &payload, pkey, pkey_id.clone())?;
+    let body = jws(url, nonce, &payload, pkey, account_id.clone())?;
     let resp = self
       .http_client
       .post(url)
@@ -189,7 +189,7 @@ impl Directory {
     url: &str,
     payload: &str,
     pkey: &PKey<Private>,
-    pkey_id: &Option<String>,
+    account_id: &Option<String>,
   ) -> Result<(Result<Bytes, ServerError>, reqwest::header::HeaderMap), Error>
   {
     let mut attempt = 0;
@@ -198,7 +198,7 @@ impl Directory {
       attempt += 1;
 
       let resp = self
-        .authenticated_request_raw(url, &payload, &pkey, &pkey_id)
+        .authenticated_request_raw(url, &payload, &pkey, &account_id)
         .await?;
 
       let headers = resp.headers().clone();
@@ -232,7 +232,7 @@ impl Directory {
     url: &str,
     payload: T,
     pkey: PKey<Private>,
-    pkey_id: Option<String>,
+    account_id: Option<String>,
   ) -> Result<(ServerResult<R>, reqwest::header::HeaderMap), Error>
   where
     T: Serialize,
@@ -246,7 +246,7 @@ impl Directory {
     };
 
     let (res, headers) = self
-      .authenticated_request_bytes(url, &payload, &pkey, &pkey_id)
+      .authenticated_request_bytes(url, &payload, &pkey, &account_id)
       .await?;
 
     let bytes = match res {
