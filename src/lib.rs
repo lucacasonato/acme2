@@ -365,4 +365,62 @@ mod tests {
     let cert = order.certificate().await.unwrap().unwrap();
     assert!(cert.len() > 1);
   }
+
+  #[tokio::test]
+  async fn test_order_dns01_challenge_pebble() {
+    let account = pebble_account().await;
+    let mut builder = OrderBuilder::new(account);
+    let order = builder
+      .add_dns_identifier(
+        "test-order-dns01-challenge-pebble.lcas.dev".to_string(),
+      )
+      .build()
+      .await
+      .unwrap();
+    let authorizations = order.authorizations().await.unwrap();
+    let client = pebble_http_client().await;
+
+    for auth in authorizations {
+      let challenge = auth.get_challenge("dns-01").unwrap();
+
+      assert_eq!(challenge.status, ChallengeStatus::Pending);
+      client
+        .post("http://localhost:8055/set-txt")
+        .json(&json!({
+          "host": "_acme-challenge.test-order-dns01-challenge-pebble.lcas.dev.",
+          "value": challenge.key_authorization_encoded().unwrap().unwrap(),
+        }))
+        .send()
+        .await
+        .unwrap();
+      let challenge = challenge.validate().await.unwrap();
+      let challenge = challenge
+        .wait_done(Duration::from_secs(5), 3)
+        .await
+        .unwrap();
+      println!("{:#?}", challenge.error);
+      assert_eq!(challenge.status, ChallengeStatus::Valid);
+      client
+        .post("http://localhost:8055/clear-txt")
+        .json(&json!({
+          "host": "_acme-challenge.test-order-dns01-challenge-pebble.lcas.dev."
+        }))
+        .send()
+        .await
+        .unwrap();
+      let authorization =
+        auth.wait_done(Duration::from_secs(5), 3).await.unwrap();
+      assert_eq!(authorization.status, AuthorizationStatus::Valid)
+    }
+
+    assert_eq!(order.status, OrderStatus::Pending);
+    let order = order.wait_ready(Duration::from_secs(5), 3).await.unwrap();
+    assert_eq!(order.status, OrderStatus::Ready);
+    let pkey = gen_rsa_private_key(4096).unwrap();
+    let order = order.finalize(Csr::Automatic(pkey)).await.unwrap();
+    let order = order.wait_done(Duration::from_secs(5), 3).await.unwrap();
+    assert_eq!(order.status, OrderStatus::Valid);
+    let cert = order.certificate().await.unwrap().unwrap();
+    assert!(cert.len() > 1);
+  }
 }

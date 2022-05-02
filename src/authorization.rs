@@ -214,8 +214,8 @@ impl Authorization {
 }
 
 impl Challenge {
-  /// The key authorization is the token that the HTTP01, or DNS01
-  // challenges should be serving for the ACME server to inspect.
+  /// The key authorization is the token that the HTTP01 challenge
+  // should be serving for the ACME server to inspect.
   pub fn key_authorization(&self) -> Result<Option<String>, Error> {
     if let Some(token) = self.token.clone() {
       let account = self.account.clone().unwrap();
@@ -233,6 +233,21 @@ impl Challenge {
       );
 
       Ok(Some(key_authorization))
+    } else {
+      Ok(None)
+    }
+  }
+
+  /// The encoded key authorization is the token that the DNS01
+  // challenge should be serving for the ACME server to inspect.
+  pub fn key_authorization_encoded(&self) -> Result<Option<String>, Error> {
+    let key_authorization = self.key_authorization()?;
+
+    if let Some(key_authorization) = key_authorization {
+      Ok(Some(b64(&hash(
+        MessageDigest::sha256(),
+        &key_authorization.into_bytes(),
+      )?)))
     } else {
       Ok(None)
     }
