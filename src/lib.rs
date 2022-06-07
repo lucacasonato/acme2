@@ -131,9 +131,13 @@ pub use order::*;
 #[cfg(test)]
 mod tests {
   use crate::*;
+  use openssl::pkey::PKey;
   use serde_json::json;
   use std::sync::Arc;
   use std::time::Duration;
+
+  const PEBBLE_PORT: u16 = 14000;
+  const PEBBLE_PORT_EAB: u16 = 14001;
 
   async fn pebble_http_client() -> reqwest::Client {
     let raw = tokio::fs::read("./certs/pebble.minica.pem").await.unwrap();
@@ -144,10 +148,10 @@ mod tests {
       .unwrap()
   }
 
-  async fn pebble_directory() -> Arc<Directory> {
+  async fn pebble_directory(port: u16) -> Arc<Directory> {
     let http_client = pebble_http_client().await;
 
-    DirectoryBuilder::new("https://localhost:14000/dir".to_string())
+    DirectoryBuilder::new(format!("https://localhost:{}/dir", port))
       .http_client(http_client)
       .build()
       .await
@@ -155,7 +159,7 @@ mod tests {
   }
 
   async fn pebble_account() -> Arc<Account> {
-    let dir = pebble_directory().await;
+    let dir = pebble_directory(PEBBLE_PORT).await;
     let mut builder = AccountBuilder::new(dir);
 
     let account = builder
@@ -193,7 +197,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_client_creation_pebble() {
-    let dir = pebble_directory().await;
+    let dir = pebble_directory(PEBBLE_PORT).await;
 
     let meta = dir.meta.clone().unwrap();
 
@@ -203,7 +207,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_account_creation_pebble() {
-    let dir = pebble_directory().await;
+    let dir = pebble_directory(PEBBLE_PORT).await;
 
     let mut builder = AccountBuilder::new(dir.clone());
     let account = builder
@@ -226,6 +230,30 @@ mod tests {
     assert!(!account.id.is_empty());
     assert_eq!(account.status, AccountStatus::Valid);
     assert_eq!(account2.status, AccountStatus::Valid);
+  }
+
+  #[tokio::test]
+  async fn test_account_creation_pebble_eab() {
+    let dir = pebble_directory(PEBBLE_PORT_EAB).await;
+
+    let eab_key = {
+      let value_b64 =
+        "zWNDZM6eQGHWpSRTPal5eIUYFTu7EajVIoguysqZ9wG44nMEtx3MUAsUDkMTQ12W";
+      let value = base64::decode(&value_b64).unwrap();
+      PKey::hmac(&value).unwrap()
+    };
+
+    let mut builder = AccountBuilder::new(dir.clone());
+    let account = builder
+      .contact(vec!["mailto:hello@lcas.dev".to_string()])
+      .external_account_binding("kid-1".to_string(), eab_key)
+      .terms_of_service_agreed(true)
+      .build()
+      .await
+      .unwrap();
+
+    assert!(!account.id.is_empty());
+    assert_eq!(account.status, AccountStatus::Valid);
   }
 
   #[tokio::test]

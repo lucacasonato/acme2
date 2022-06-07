@@ -1,6 +1,8 @@
 use crate::directory::Directory;
 use crate::error::*;
 use crate::helpers::*;
+use crate::jws::jws;
+use crate::jws::Jwk;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
 use serde::Deserialize;
@@ -25,6 +27,15 @@ pub enum AccountStatus {
   Revoked,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ExternalAccountBinding {
+  /// Key identifier, in string form.
+  key_id: String,
+
+  /// HMAC private key.
+  private_key: PKey<Private>,
+}
+
 /// An ACME account. This is used to identify a subscriber to an ACME server.
 ///
 /// This resource should be created through an [`AccountBuilder`].
@@ -38,6 +49,9 @@ pub struct Account {
   pub(crate) private_key: Option<PKey<Private>>,
 
   #[serde(skip)]
+  pub(crate) eab_config: Option<ExternalAccountBinding>,
+
+  #[serde(skip)]
   /// The account ID of this account.
   pub id: String,
 
@@ -49,8 +63,6 @@ pub struct Account {
   /// Including this field in a newAccount request, with a value of true,
   /// indicates the client's agreement with the terms of service.
   pub terms_of_service_agreed: Option<bool>,
-  // TODO(lucacasonato): maybe add support for this
-  // external_account_binding: Option<Value>
   // TODO(lucacasonato): enable this once LE supports it
   // /// A URL from which a list of orders submitted by this account can be
   // /// fetched
@@ -65,11 +77,11 @@ pub struct AccountBuilder {
   directory: Arc<Directory>,
 
   private_key: Option<PKey<Private>>,
+  eab_config: Option<ExternalAccountBinding>,
 
   contact: Option<Vec<String>>,
   terms_of_service_agreed: Option<bool>,
   only_return_existing: Option<bool>,
-  // TODO(lucacasonato): externalAccountBinding
 }
 
 impl AccountBuilder {
@@ -80,6 +92,7 @@ impl AccountBuilder {
     AccountBuilder {
       directory,
       private_key: None,
+      eab_config: None,
       contact: None,
       terms_of_service_agreed: None,
       only_return_existing: None,
@@ -90,6 +103,18 @@ impl AccountBuilder {
   /// may not be the same as a certificate private key.
   pub fn private_key(&mut self, private_key: PKey<Private>) -> &mut Self {
     self.private_key = Some(private_key);
+    self
+  }
+
+  pub fn external_account_binding(
+    &mut self,
+    key_id: String,
+    private_key: PKey<Private>,
+  ) -> &mut Self {
+    self.eab_config = Some(ExternalAccountBinding {
+      key_id,
+      private_key,
+    });
     self
   }
 
@@ -136,6 +161,20 @@ impl AccountBuilder {
 
     let url = self.directory.new_account_url.clone();
 
+    let external_account_binding = if let Some(eab_config) = &self.eab_config {
+      let payload = serde_json::to_string(&Jwk::new(&private_key)).unwrap();
+
+      Some(jws(
+        &url,
+        None,
+        &payload,
+        &eab_config.private_key,
+        Some(eab_config.key_id.clone()),
+      )?)
+    } else {
+      None
+    };
+
     let (res, headers) = self
       .directory
       .authenticated_request::<_, Account>(
@@ -143,7 +182,9 @@ impl AccountBuilder {
         json!({
           "contact": self.contact,
           "termsOfServiceAgreed": self.terms_of_service_agreed,
-          "onlyReturnExisting": self.only_return_existing
+          "onlyReturnExisting": self.only_return_existing,
+          // TODO: omit if None?
+          "externalAccountBinding": external_account_binding,
         }),
         private_key.clone(),
         None,
@@ -165,6 +206,7 @@ impl AccountBuilder {
 
     acc.directory = Some(self.directory.clone());
     acc.private_key = Some(private_key);
+    acc.eab_config = self.eab_config.clone();
     acc.id = account_id;
     Ok(Arc::new(acc))
   }
