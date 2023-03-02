@@ -74,6 +74,43 @@ impl Jwk {
       y: b64(y),
     })
   }
+
+  fn sign_sha256(&self, pkey: &PKey<Private>, payload: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
+    signer.update(payload)?;
+    let bytes = signer.sign_to_vec()?;
+    Ok(match self {
+      Jwk::RSA { .. } => bytes,
+      Jwk::EC { .. } => {
+        // OpenSSL encodes EC signatures in ASN.1 by default.
+        // See: https://stackoverflow.com/a/69109085/1264974
+        // We parse ASN1 here to transform the signature in simple "concatenated" form
+        // as used by JWS.
+        let result : (asn1::BigInt, asn1::BigInt) = asn1::parse(&bytes, |d| {
+          return d.read_element::<asn1::Sequence>()?.parse(|d| {
+            let r = d.read_element::<asn1::BigInt>()?;
+            let s = d.read_element::<asn1::BigInt>()?;
+            return Ok((r, s));
+          });
+        }).map_err(Error::Other)?;
+
+        let r = result.0.as_bytes();
+        let s = result.1.as_bytes();
+        // Per [asn1::BigInt::new]:
+        // "<...> if the high bit would be set in the first octet, a leading `\x00`
+        // [is] prepended (to disambiguate from negative values)."
+        //
+        // Strip that first byte if it exists.
+        let r = &r[r.len() - 32..];
+        let s = &s[s.len() - 32..];
+
+        let mut bytes = Vec::with_capacity(r.len() + s.len());
+        bytes.extend_from_slice(r);
+        bytes.extend_from_slice(s);
+        bytes
+      }
+    })
+  }
 }
 
 pub(crate) fn jws(
@@ -91,7 +128,7 @@ pub(crate) fn jws(
     alg: match &jwk {
       Jwk::RSA { .. } => "RS256",
       Jwk::EC { crv, .. } if crv == "P-256" => "ES256",
-      _ => unimplemented!(),
+      _ => unreachable!("Key other than RSA or EC P-256 should not have been created by Jwk::new"),
     }
     .into(),
     url: url.to_string(),
@@ -106,33 +143,8 @@ pub(crate) fn jws(
 
   let protected_b64 = b64(&serde_json::to_string(&header)?.into_bytes());
 
-  let signature = {
-    let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
-    signer
-      .update(&format!("{}.{}", protected_b64, payload_b64).into_bytes())?;
-    let bytes = signer.sign_to_vec()?;
-    match &jwk {
-      Jwk::RSA { .. } => bytes,
-      Jwk::EC { .. } => {
-        let result: asn1::ParseResult<_> = asn1::parse(&bytes, |d| {
-          return d.read_element::<asn1::Sequence>()?.parse(|d| {
-            let r = d.read_element::<asn1::BigInt>()?;
-            let s = d.read_element::<asn1::BigInt>()?;
-            return Ok((r, s));
-          });
-        });
-        let result = result.unwrap();
-        let mut bytes = Vec::new();
-        let r = result.0.as_bytes();
-        let s = result.1.as_bytes();
-        let r = &r[r.len() - 32..];
-        let s = &s[s.len() - 32..];
-        bytes.extend_from_slice(r);
-        bytes.extend_from_slice(s);
-        bytes
-      }
-    }
-  };
+  let to_sign = format!("{}.{}", protected_b64, payload_b64);
+  let signature = jwk.sign_sha256(pkey, to_sign.as_bytes())?;
   let signature_b64 = b64(&signature);
 
   let res = serde_json::to_string(&json!({
