@@ -2,7 +2,7 @@ use crate::error::*;
 use crate::helpers::*;
 use openssl::bn::BigNumContext;
 use openssl::ec::{EcKey, PointConversionForm};
-use openssl::hash::MessageDigest;
+use openssl::hash::{hash, MessageDigest};
 use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
@@ -110,6 +110,28 @@ impl Jwk {
         bytes
       }
     })
+  }
+
+  // Returns a JWS "thumbprint" as defined by RFC 7638.
+  pub fn thumbprint(&self) -> Result<String, Error> {
+    // Conver to a JSON value: `Jwk` is already of suitable form
+    // to be serialized to a JSON representation
+    let value = serde_json::to_value(self).unwrap();
+    let map = match value {
+      serde_json::Value::Object(m) => m,
+      _ => unreachable!("Serializing Jwk to JSON should always produce an object"),
+    };
+
+    // Thumbprints need to be serialized with keys in lexicographical order,
+    // in order to yield a consistent hash.
+    // Sort the keys, reconstruct a new `Map` in the sort order,
+    // and then reserialize (this relies on serde's `preserve_order` feature).
+    let mut keys: Vec<_> = map.into_iter().collect();
+    keys.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+    let map_sorted: serde_json::Map<_, _> = keys.into_iter().collect();
+    let serialized = serde_json::to_string(&serde_json::Value::Object(map_sorted))?;
+
+    Ok(b64(&hash(MessageDigest::sha256(), serialized.as_bytes())?))
   }
 }
 
