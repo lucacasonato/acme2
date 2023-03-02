@@ -220,17 +220,23 @@ impl Challenge {
     if let Some(token) = self.token.clone() {
       let account = self.account.clone().unwrap();
 
-      let key_authorization = format!(
-        "{}.{}",
-        token,
-        b64(&hash(
-          MessageDigest::sha256(),
-          &serde_json::to_string(&Jwk::new(
-            &account.private_key.clone().unwrap()
-          ))?
-          .into_bytes()
-        )?)
-      );
+      let value = serde_json::to_value(&Jwk::new(&account.private_key.clone().unwrap())).unwrap();
+      let map = match value {
+          serde_json::Value::Object(m) => m,
+          _ => unreachable!(),
+      };
+      let mut keys: Vec<_> = map.keys().collect();
+      keys.sort();
+      let mut map_sorted = serde_json::Map::new();
+      for k in keys {
+          map_sorted.insert(k.clone(), map[k].clone());
+      }
+      println!("map sorted: {:?}", map_sorted);
+      let serialized = serde_json::to_string(&serde_json::Value::Object(map_sorted)).unwrap();
+      println!("serialized: {}", serialized);
+
+      let thumbprint = b64(&hash(MessageDigest::sha256(), serialized.as_bytes())?);
+      let key_authorization = format!("{}.{}", token, thumbprint);
 
       Ok(Some(key_authorization))
     } else {
