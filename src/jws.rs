@@ -96,20 +96,26 @@ impl Jwk {
           })
         }).map_err(Error::Other)?;
 
-        let r = result.0.as_bytes();
-        let s = result.1.as_bytes();
+        let mut r = result.0.as_bytes();
+        let mut s = result.1.as_bytes();
         // Per [asn1::BigInt::new]:
         // "<...> if the high bit would be set in the first octet, a leading `\x00`
         // [is] prepended (to disambiguate from negative values)."
         //
         // Strip that first byte if it exists.
-        let r = &r[r.len() - 32..];
-        let s = &s[s.len() - 32..];
+        if r[0] == 0 {
+            r = &r[1..];
+        }
+        if s[0] == 0 {
+            s = &s[1..];
+        }
 
-        let mut bytes = Vec::with_capacity(r.len() + s.len());
-        bytes.extend_from_slice(r);
-        bytes.extend_from_slice(s);
-        bytes
+        // Pad each to 32 bytes and concatenate.
+        const COMPONENT_SIZE: usize = 32;
+        let mut bytes = [0; 64];
+        (&mut bytes[COMPONENT_SIZE-r.len()..COMPONENT_SIZE]).copy_from_slice(r);
+        (&mut bytes[2*COMPONENT_SIZE-s.len()..]).copy_from_slice(s);
+        bytes.to_vec()
       }
     })
   }
