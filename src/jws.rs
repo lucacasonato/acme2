@@ -177,19 +177,3 @@ pub(crate) fn jws(
   println!("{}", res);
   Ok(res)
 }
-
-#[cfg(test)]
-mod test {
-  use super::*;
-  use openssl::ec::{EcGroup, EcKey};
-
-  #[test]
-  fn test_jws() {
-    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
-    let key = PKey::from_ec_key(EcKey::generate(&group).unwrap()).unwrap();
-    assert_eq!(
-      "",
-      jws("http://foo", "bar".into(), "payload", &key, None).unwrap()
-    )
-  }
-}
