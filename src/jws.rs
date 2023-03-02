@@ -1,11 +1,12 @@
 use crate::error::*;
 use crate::helpers::*;
 use openssl::bn::BigNumContext;
-use openssl::ec::PointConversionForm;
+use openssl::ec::{EcKey, PointConversionForm};
 use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::pkey::PKey;
 use openssl::pkey::Private;
+use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use serde::Deserialize;
 use serde::Serialize;
@@ -30,37 +31,48 @@ pub(crate) enum Jwk {
 }
 
 impl Jwk {
-  pub fn new(pkey: &PKey<Private>) -> Jwk {
-    // TODO: don't panic
+  pub fn new(pkey: &PKey<Private>) -> Result<Jwk, Error> {
     if let Ok(r) = pkey.rsa() {
-      Jwk::RSA {
-        e: b64(&r.e().to_vec()),
-        n: b64(&r.n().to_vec()),
-      }
-    } else if let Ok(e) = pkey.ec_key() {
-      if e.group().curve_name() != Some(Nid::X9_62_PRIME256V1) {
-        panic!("{:?}", e.group().curve_name())
-      }
-      let public = e.public_key();
-
-      let mut ctx = BigNumContext::new().unwrap();
-      let bytes = public
-        .to_bytes(e.group(), PointConversionForm::UNCOMPRESSED, &mut ctx)
-        .unwrap();
-
-      assert_eq!(65, bytes.len());
-      let bytes = &bytes[1..]; // truncate 0x04
-      let x = &bytes[0..bytes.len() / 2];
-      let y = &bytes[bytes.len() / 2..];
-
-      Jwk::EC {
-        crv: "P-256".into(),
-        x: b64(x),
-        y: b64(y),
-      }
-    } else {
-      panic!("?")
+      return Ok(Jwk::new_from_rsa(&r));
     }
+
+    if let Ok(e) = pkey.ec_key() {
+      if e.group().curve_name() == Some(Nid::X9_62_PRIME256V1) {
+        return Jwk::new_from_p256(&e);
+      }
+    }
+
+    Err(Error::Other("unsupported private key type".into()))
+  }
+
+  fn new_from_rsa(pkey: &Rsa<Private>) -> Jwk {
+    Jwk::RSA {
+      e: b64(&pkey.e().to_vec()),
+      n: b64(&pkey.n().to_vec()),
+    }
+  }
+
+  fn new_from_p256(pkey: &EcKey<Private>) -> Result<Jwk, Error> {
+    let public = pkey.public_key();
+
+    // Convert to JWK-suitable form, see
+    // https://www.openssl.org/docs/man3.0/man3/EC_GROUP_copy.html
+    // for descriptions of Compressed/Uncompressed encodings
+    let mut ctx = BigNumContext::new().unwrap();
+    let bytes = public
+      .to_bytes(pkey.group(), PointConversionForm::UNCOMPRESSED, &mut ctx)
+      .unwrap();
+
+    assert_eq!(65, bytes.len());
+    let bytes = &bytes[1..]; // truncate 0x04
+    let x = &bytes[0..bytes.len() / 2];
+    let y = &bytes[bytes.len() / 2..];
+
+    Ok(Jwk::EC {
+      crv: "P-256".into(),
+      x: b64(x),
+      y: b64(y),
+    })
   }
 }
 
@@ -72,7 +84,7 @@ pub(crate) fn jws(
   account_id: Option<String>,
 ) -> Result<String, Error> {
   let payload_b64 = b64(&payload.as_bytes());
-  let jwk = Jwk::new(&pkey);
+  let jwk = Jwk::new(&pkey)?;
 
   let mut header = JwsHeader {
     nonce,

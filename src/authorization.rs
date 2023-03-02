@@ -220,7 +220,8 @@ impl Challenge {
     if let Some(token) = self.token.clone() {
       let account = self.account.clone().unwrap();
 
-      let value = serde_json::to_value(&Jwk::new(&account.private_key.clone().unwrap())).unwrap();
+      let jwk = Jwk::new(&account.private_key.clone().unwrap()).unwrap();
+      let value = serde_json::to_value(&jwk).unwrap();
       let map = match value {
           serde_json::Value::Object(m) => m,
           _ => unreachable!(),
