@@ -26,8 +26,10 @@ struct JwsHeader {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "kty")]
 pub(crate) enum Jwk {
-  RSA { e: String, n: String },
-  EC { crv: String, x: String, y: String },
+  #[serde(rename = "RSA")]
+  Rsa { e: String, n: String },
+  #[serde(rename = "EC")]
+  Ec { crv: String, x: String, y: String },
 }
 
 impl Jwk {
@@ -46,7 +48,7 @@ impl Jwk {
   }
 
   fn new_from_rsa(pkey: &Rsa<Private>) -> Jwk {
-    Jwk::RSA {
+    Jwk::Rsa {
       e: b64(&pkey.e().to_vec()),
       n: b64(&pkey.n().to_vec()),
     }
@@ -68,7 +70,7 @@ impl Jwk {
     let x = &bytes[0..bytes.len() / 2];
     let y = &bytes[bytes.len() / 2..];
 
-    Ok(Jwk::EC {
+    Ok(Jwk::Ec {
       crv: "P-256".into(),
       x: b64(x),
       y: b64(y),
@@ -80,18 +82,18 @@ impl Jwk {
     signer.update(payload)?;
     let bytes = signer.sign_to_vec()?;
     Ok(match self {
-      Jwk::RSA { .. } => bytes,
-      Jwk::EC { .. } => {
+      Jwk::Rsa { .. } => bytes,
+      Jwk::Ec { .. } => {
         // OpenSSL encodes EC signatures in ASN.1 by default.
         // See: https://stackoverflow.com/a/69109085/1264974
         // We parse ASN1 here to transform the signature in simple "concatenated" form
         // as used by JWS.
         let result : (asn1::BigInt, asn1::BigInt) = asn1::parse(&bytes, |d| {
-          return d.read_element::<asn1::Sequence>()?.parse(|d| {
+          d.read_element::<asn1::Sequence>()?.parse(|d| {
             let r = d.read_element::<asn1::BigInt>()?;
             let s = d.read_element::<asn1::BigInt>()?;
-            return Ok((r, s));
-          });
+            Ok((r, s))
+          })
         }).map_err(Error::Other)?;
 
         let r = result.0.as_bytes();
@@ -142,14 +144,14 @@ pub(crate) fn jws(
   pkey: &PKey<Private>,
   account_id: Option<String>,
 ) -> Result<String, Error> {
-  let payload_b64 = b64(&payload.as_bytes());
-  let jwk = Jwk::new(&pkey)?;
+  let payload_b64 = b64(payload.as_bytes());
+  let jwk = Jwk::new(pkey)?;
 
   let mut header = JwsHeader {
     nonce,
     alg: match &jwk {
-      Jwk::RSA { .. } => "RS256",
-      Jwk::EC { crv, .. } if crv == "P-256" => "ES256",
+      Jwk::Rsa { .. } => "RS256",
+      Jwk::Ec { crv, .. } if crv == "P-256" => "ES256",
       _ => unreachable!("Key other than RSA or EC P-256 should not have been created by Jwk::new"),
     }
     .into(),

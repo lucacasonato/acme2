@@ -160,7 +160,7 @@ impl Directory {
     account_id: &Option<String>,
   ) -> Result<reqwest::Response, Error> {
     let nonce = self.get_nonce().await?;
-    let body = jws(url, nonce, &payload, pkey, account_id.clone())?;
+    let body = jws(url, nonce, payload, pkey, account_id.clone())?;
     let resp = self
       .http_client
       .post(url)
@@ -198,7 +198,7 @@ impl Directory {
       attempt += 1;
 
       let resp = self
-        .authenticated_request_raw(url, &payload, &pkey, &account_id)
+        .authenticated_request_raw(url, payload, pkey, account_id)
         .await?;
 
       let headers = resp.headers().clone();
