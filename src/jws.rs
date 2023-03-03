@@ -177,11 +177,9 @@ pub(crate) fn jws(
   let signature = jwk.sign_sha256(pkey, to_sign.as_bytes())?;
   let signature_b64 = b64(&signature);
 
-  let res = serde_json::to_string(&json!({
+  Ok(serde_json::to_string(&json!({
     "protected": protected_b64,
     "payload": payload_b64,
     "signature": signature_b64
-  }))?;
-  println!("{}", res);
-  Ok(res)
+  }))?)
 }
