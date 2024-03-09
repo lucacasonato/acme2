@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bollard::{
-  container::{Config, LogOutput},
-  Docker,
+    container::{Config, LogOutput},
+    Docker,
 };
 use futures_util::StreamExt;
 use std::{path::PathBuf, time::Duration};
@@ -9,169 +9,161 @@ use tokio::time::sleep;
 
 #[derive(Debug, Clone)]
 pub struct Container {
-  docker: Docker,
-  pub container_id: String,
-  pub name: String,
-  pub log_to: Option<PathBuf>,
+    docker: Docker,
+    pub container_id: String,
+    pub name: String,
+    pub log_to: Option<PathBuf>,
 }
 
 impl Container {
-  pub async fn create(
-    name: String,
-    docker: Docker,
-    config: Config<String>,
-    log_to: Option<PathBuf>,
-  ) -> Result<Self> {
-    let image = config
-      .image
-      .as_ref()
-      .ok_or_else(|| anyhow::anyhow!("No image specified."))?;
+    pub async fn create(
+        name: String,
+        docker: Docker,
+        config: Config<String>,
+        log_to: Option<PathBuf>,
+    ) -> Result<Self> {
+        let image = config
+            .image
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No image specified."))?;
 
-    if !image_exists(&docker, image).await? {
-      pull_image(&docker, image).await?;
-    }
-
-    let container_response =
-      docker.create_container::<&str, _>(None, config).await?;
-
-    let container_id = container_response.id;
-
-    docker.start_container::<&str>(&container_id, None).await?;
-
-    Ok(Self {
-      docker,
-      container_id,
-      name,
-      log_to,
-    })
-  }
-
-  async fn try_get_port(&self, container_port: &str) -> Result<u16> {
-    let container_info = self
-      .docker
-      .inspect_container(&self.container_id, None)
-      .await?;
-
-    let network_settings = container_info
-      .network_settings
-      .ok_or_else(|| anyhow::anyhow!("Container had no network settings."))?;
-
-    let port = network_settings
-      .ports
-      .ok_or_else(|| anyhow::anyhow!("Container had no ports."))?;
-
-    let port = port
-      .get(container_port)
-      .ok_or_else(|| {
-        anyhow::anyhow!("Container had no port {}/tcp.", container_port)
-      })?
-      .as_ref()
-      .ok_or_else(|| {
-        anyhow::anyhow!("Container had no port {}/tcp.", container_port)
-      })?
-      .first()
-      .ok_or_else(|| {
-        anyhow::anyhow!("Container had no port {}/tcp.", container_port)
-      })?;
-
-    let port = port.host_port.as_ref().ok_or_else(|| {
-      anyhow::anyhow!("Container had no port {}/tcp.", container_port)
-    })?;
-
-    Ok(port.parse()?)
-  }
-
-  async fn get_port(&self, container_port: &str) -> Result<u16> {
-    // There can be a race condition where the container is ready but has
-    // not yet received a port assignment, so we retry a few times.
-    for _ in 0..3 {
-      match self.try_get_port(container_port).await {
-        Ok(port) => return Ok(port),
-        Err(e) => {
-          tracing::info!(?e, "Failed to get port, retrying...");
+        if !image_exists(&docker, image).await? {
+            pull_image(&docker, image).await?;
         }
-      }
-      sleep(Duration::from_millis(100)).await;
+
+        let container_response = docker.create_container::<&str, _>(None, config).await?;
+
+        let container_id = container_response.id;
+
+        docker.start_container::<&str>(&container_id, None).await?;
+
+        Ok(Self {
+            docker,
+            container_id,
+            name,
+            log_to,
+        })
     }
 
-    Err(anyhow::anyhow!("Failed to get port after retries."))
-  }
+    async fn try_get_port(&self, container_port: &str) -> Result<u16> {
+        let container_info = self
+            .docker
+            .inspect_container(&self.container_id, None)
+            .await?;
 
-  pub async fn get_udp_port(&self, container_port: u16) -> Result<u16> {
-    self.get_port(&format!("{}/udp", container_port)).await
-  }
+        let network_settings = container_info
+            .network_settings
+            .ok_or_else(|| anyhow::anyhow!("Container had no network settings."))?;
 
-  pub async fn get_tcp_port(&self, container_port: u16) -> Result<u16> {
-    self.get_port(&format!("{}/tcp", container_port)).await
-  }
+        let port = network_settings
+            .ports
+            .ok_or_else(|| anyhow::anyhow!("Container had no ports."))?;
 
-  pub async fn collect_stdout(&self) -> Result<Vec<u8>> {
-    let mut stdout_buffer = Vec::new();
+        let port = port
+            .get(container_port)
+            .ok_or_else(|| anyhow::anyhow!("Container had no port {}/tcp.", container_port))?
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Container had no port {}/tcp.", container_port))?
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("Container had no port {}/tcp.", container_port))?;
 
-    let mut stream = self.docker.logs::<String>(
-      &self.container_id,
-      Some(bollard::container::LogsOptions::<String> {
-        follow: true,
-        stdout: true,
-        stderr: true,
-        ..Default::default()
-      }),
-    );
+        let port = port
+            .host_port
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Container had no port {}/tcp.", container_port))?;
 
-    while let Some(next) = stream.next().await {
-      let chunk = next?;
-      match chunk {
-        LogOutput::StdOut { message } => {
-          stdout_buffer.extend(message);
+        Ok(port.parse()?)
+    }
+
+    async fn get_port(&self, container_port: &str) -> Result<u16> {
+        // There can be a race condition where the container is ready but has
+        // not yet received a port assignment, so we retry a few times.
+        for _ in 0..3 {
+            match self.try_get_port(container_port).await {
+                Ok(port) => return Ok(port),
+                Err(e) => {
+                    tracing::info!(?e, "Failed to get port, retrying...");
+                }
+            }
+            sleep(Duration::from_millis(100)).await;
         }
-        _ => {}
-      }
+
+        Err(anyhow::anyhow!("Failed to get port after retries."))
     }
 
-    Ok(stdout_buffer)
-  }
-
-  pub async fn stop(&self) -> Result<()> {
-    self.docker.stop_container(&self.container_id, None).await?;
-
-    if let Some(log_to) = &self.log_to {
-      let log_stream = self.collect_stdout().await?;
-      std::fs::write(log_to.join(format!("{}.txt", self.name)), log_stream)?;
+    pub async fn get_udp_port(&self, container_port: u16) -> Result<u16> {
+        self.get_port(&format!("{}/udp", container_port)).await
     }
 
-    self
-      .docker
-      .remove_container(&self.container_id, None)
-      .await?;
+    pub async fn get_tcp_port(&self, container_port: u16) -> Result<u16> {
+        self.get_port(&format!("{}/tcp", container_port)).await
+    }
 
-    Ok(())
-  }
+    pub async fn collect_stdout(&self) -> Result<Vec<u8>> {
+        let mut stdout_buffer = Vec::new();
+
+        let mut stream = self.docker.logs::<String>(
+            &self.container_id,
+            Some(bollard::container::LogsOptions::<String> {
+                follow: true,
+                stdout: true,
+                stderr: true,
+                ..Default::default()
+            }),
+        );
+
+        while let Some(next) = stream.next().await {
+            let chunk = next?;
+            match chunk {
+                LogOutput::StdOut { message } => {
+                    stdout_buffer.extend(message);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(stdout_buffer)
+    }
+
+    pub async fn stop(&self) -> Result<()> {
+        self.docker.stop_container(&self.container_id, None).await?;
+
+        if let Some(log_to) = &self.log_to {
+            let log_stream = self.collect_stdout().await?;
+            std::fs::write(log_to.join(format!("{}.txt", self.name)), log_stream)?;
+        }
+
+        self.docker
+            .remove_container(&self.container_id, None)
+            .await?;
+
+        Ok(())
+    }
 }
 
 pub async fn image_exists(docker: &Docker, image: &str) -> Result<bool> {
-  match docker.inspect_image(image).await {
-    Ok(..) => Ok(true),
-    Err(bollard::errors::Error::DockerResponseServerError {
-      status_code: 404,
-      ..
-    }) => Ok(false),
-    Err(e) => Err(e.into()),
-  }
+    match docker.inspect_image(image).await {
+        Ok(..) => Ok(true),
+        Err(bollard::errors::Error::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(false),
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub async fn pull_image(docker: &Docker, image: &str) -> Result<()> {
-  let options = bollard::image::CreateImageOptions {
-    from_image: image,
-    ..Default::default()
-  };
+    let options = bollard::image::CreateImageOptions {
+        from_image: image,
+        ..Default::default()
+    };
 
-  let mut result = docker.create_image(Some(options), None, None);
-  // create_image returns a stream; the image is not fully pulled until the stream is consumed.
-  while let Some(next) = result.next().await {
-    let _ = next?;
-  }
+    let mut result = docker.create_image(Some(options), None, None);
+    // create_image returns a stream; the image is not fully pulled until the stream is consumed.
+    while let Some(next) = result.next().await {
+        let _ = next?;
+    }
 
-  tracing::info!(?image, "Pulled image.");
+    tracing::info!(?image, "Pulled image.");
 
-  Ok(())
+    Ok(())
 }
