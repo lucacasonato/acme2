@@ -1,3 +1,7 @@
 target/
 tests/
+
 Cargo.lock
+
+# Nixos
+.direnv
