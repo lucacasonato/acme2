@@ -136,9 +136,13 @@ mod tests {
   use std::time::Duration;
 
   async fn pebble_http_client() -> reqwest::Client {
-    let raw = tokio::fs::read("./certs/pebble.minica.pem").await.unwrap();
+    // let raw = tokio::fs::read("./certs/pebble.minica.pem").await.unwrap();
+    let raw = tokio::fs::read("/etc/pebble/test/certs/pebble.minica.pem")
+      .await
+      .unwrap();
     let cert = reqwest::Certificate::from_pem(&raw).unwrap();
     reqwest::Client::builder()
+      // .danger_accept_invalid_certs(true)
       .add_root_certificate(cert)
       .build()
       .unwrap()
