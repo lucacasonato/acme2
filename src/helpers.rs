@@ -1,4 +1,6 @@
 use crate::error::*;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use openssl::ec::EcGroup;
 use openssl::ec::EcKey;
 use openssl::nid::Nid;
@@ -20,7 +22,7 @@ pub struct Identifier {
 }
 
 pub(crate) fn b64(data: &[u8]) -> String {
-  base64::encode_config(data, ::base64::URL_SAFE_NO_PAD)
+  URL_SAFE_NO_PAD.encode(data)
 }
 
 /// Generate a new RSA private key using the specified size,
