@@ -17,7 +17,7 @@ jobs:
       - name: Install rust
         uses: hecrj/setup-rust-action@v1
         with:
-          rust-version: 1.51.0
+          rust-version: 1.80.1
       - name: Install clippy and rustfmt
         run: |
           rustup component add clippy
@@ -32,6 +32,8 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install OpenSSL
+        run: apt install libssl-dev
       - name: Lint
         run: |
           cargo clippy --all-targets --locked --release -- -D clippy::all

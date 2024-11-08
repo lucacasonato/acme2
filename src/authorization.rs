@@ -220,17 +220,9 @@ impl Challenge {
     if let Some(token) = self.token.clone() {
       let account = self.account.clone().unwrap();
 
-      let key_authorization = format!(
-        "{}.{}",
-        token,
-        b64(&hash(
-          MessageDigest::sha256(),
-          &serde_json::to_string(&Jwk::new(
-            &account.private_key.clone().unwrap()
-          ))?
-          .into_bytes()
-        )?)
-      );
+      let jwk = Jwk::new(&account.private_key.clone().unwrap())?;
+      let thumbprint = jwk.thumbprint()?;
+      let key_authorization = format!("{}.{}", token, thumbprint);
 
       Ok(Some(key_authorization))
     } else {

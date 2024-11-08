@@ -131,6 +131,7 @@ pub use order::*;
 #[cfg(test)]
 mod tests {
   use crate::*;
+  use openssl::pkey::{PKey, Private};
   use serde_json::json;
   use std::sync::Arc;
   use std::time::Duration;
@@ -201,17 +202,18 @@ mod tests {
     assert_eq!(meta.website, None);
   }
 
-  #[tokio::test]
-  async fn test_account_creation_pebble() {
+  async fn test_account_creation_pebble(pkey: Option<PKey<Private>>) {
     let dir = pebble_directory().await;
 
     let mut builder = AccountBuilder::new(dir.clone());
-    let account = builder
+    builder
       .contact(vec!["mailto:hello@lcas.dev".to_string()])
-      .terms_of_service_agreed(true)
-      .build()
-      .await
-      .unwrap();
+      .terms_of_service_agreed(true);
+    if let Some(p) = pkey {
+      builder.private_key(p);
+    }
+
+    let account = builder.build().await.unwrap();
 
     assert!(!account.id.is_empty());
 
@@ -226,6 +228,17 @@ mod tests {
     assert!(!account.id.is_empty());
     assert_eq!(account.status, AccountStatus::Valid);
     assert_eq!(account2.status, AccountStatus::Valid);
+  }
+
+  #[tokio::test]
+  async fn test_account_creation_pebble_rsa() {
+    test_account_creation_pebble(None).await;
+  }
+
+  #[tokio::test]
+  async fn test_account_creation_pebble_ec() {
+    let pkey = gen_ec_p256_private_key().unwrap();
+    test_account_creation_pebble(Some(pkey)).await;
   }
 
   #[tokio::test]
