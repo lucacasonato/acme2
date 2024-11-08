@@ -77,7 +77,11 @@ impl Jwk {
     })
   }
 
-  fn sign_sha256(&self, pkey: &PKey<Private>, payload: &[u8]) -> Result<Vec<u8>, Error> {
+  fn sign_sha256(
+    &self,
+    pkey: &PKey<Private>,
+    payload: &[u8],
+  ) -> Result<Vec<u8>, Error> {
     let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
     signer.update(payload)?;
     let bytes = signer.sign_to_vec()?;
@@ -88,13 +92,14 @@ impl Jwk {
         // See: https://stackoverflow.com/a/69109085/1264974
         // We parse ASN1 here to transform the signature in simple "concatenated" form
         // as used by JWS.
-        let result : (asn1::BigInt, asn1::BigInt) = asn1::parse(&bytes, |d| {
+        let result: (asn1::BigInt, asn1::BigInt) = asn1::parse(&bytes, |d| {
           d.read_element::<asn1::Sequence>()?.parse(|d| {
             let r = d.read_element::<asn1::BigInt>()?;
             let s = d.read_element::<asn1::BigInt>()?;
             Ok((r, s))
           })
-        }).map_err(Error::Other)?;
+        })
+        .map_err(Error::Other)?;
 
         let mut r = result.0.as_bytes();
         let mut s = result.1.as_bytes();
@@ -104,17 +109,18 @@ impl Jwk {
         //
         // Strip that first byte if it exists.
         if r[0] == 0 {
-            r = &r[1..];
+          r = &r[1..];
         }
         if s[0] == 0 {
-            s = &s[1..];
+          s = &s[1..];
         }
 
         // Pad each to 32 bytes and concatenate.
         const COMPONENT_SIZE: usize = 32;
         let mut bytes = [0; 64];
-        (&mut bytes[COMPONENT_SIZE-r.len()..COMPONENT_SIZE]).copy_from_slice(r);
-        (&mut bytes[2*COMPONENT_SIZE-s.len()..]).copy_from_slice(s);
+        (&mut bytes[COMPONENT_SIZE - r.len()..COMPONENT_SIZE])
+          .copy_from_slice(r);
+        (&mut bytes[2 * COMPONENT_SIZE - s.len()..]).copy_from_slice(s);
         bytes.to_vec()
       }
     })
@@ -127,7 +133,9 @@ impl Jwk {
     let value = serde_json::to_value(self).unwrap();
     let map = match value {
       serde_json::Value::Object(m) => m,
-      _ => unreachable!("Serializing Jwk to JSON should always produce an object"),
+      _ => {
+        unreachable!("Serializing Jwk to JSON should always produce an object")
+      }
     };
 
     // Thumbprints need to be serialized with keys in lexicographical order,
@@ -137,7 +145,8 @@ impl Jwk {
     let mut keys: Vec<_> = map.into_iter().collect();
     keys.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
     let map_sorted: serde_json::Map<_, _> = keys.into_iter().collect();
-    let serialized = serde_json::to_string(&serde_json::Value::Object(map_sorted))?;
+    let serialized =
+      serde_json::to_string(&serde_json::Value::Object(map_sorted))?;
 
     Ok(b64(&hash(MessageDigest::sha256(), serialized.as_bytes())?))
   }

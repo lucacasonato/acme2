@@ -131,10 +131,10 @@ pub use order::*;
 #[cfg(test)]
 mod tests {
   use crate::*;
+  use openssl::pkey::{PKey, Private};
   use serde_json::json;
   use std::sync::Arc;
   use std::time::Duration;
-  use openssl::pkey::{PKey, Private};
 
   async fn pebble_http_client() -> reqwest::Client {
     let raw = tokio::fs::read("./certs/pebble.minica.pem").await.unwrap();
@@ -210,7 +210,7 @@ mod tests {
       .contact(vec!["mailto:hello@lcas.dev".to_string()])
       .terms_of_service_agreed(true);
     if let Some(p) = pkey {
-        builder.private_key(p);
+      builder.private_key(p);
     }
 
     let account = builder.build().await.unwrap();
@@ -232,13 +232,13 @@ mod tests {
 
   #[tokio::test]
   async fn test_account_creation_pebble_rsa() {
-      test_account_creation_pebble(None).await;
+    test_account_creation_pebble(None).await;
   }
 
   #[tokio::test]
   async fn test_account_creation_pebble_ec() {
-      let pkey = gen_ec_p256_private_key().unwrap();
-      test_account_creation_pebble(Some(pkey)).await;
+    let pkey = gen_ec_p256_private_key().unwrap();
+    test_account_creation_pebble(Some(pkey)).await;
   }
 
   #[tokio::test]
